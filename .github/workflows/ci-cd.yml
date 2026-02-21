@@ -18,21 +18,21 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup virtual environment
         run: |
           python3 -m venv venv
           echo "VIRTUAL_ENV=${PWD}/venv" >> $GITHUB_ENV
           echo "${PWD}/venv/bin" >> $GITHUB_PATH
-      
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-      
+
       - name: Prepare env for checks
         run: cp .env.example .env
-      
+
       - name: Django checks
         run: python manage.py check
 
@@ -53,29 +53,30 @@ jobs:
           set -euo pipefail
           if [ -n "${{ secrets.BACKEND_ENV_FILE }}" ]; then
             printf "%s" "${{ secrets.BACKEND_ENV_FILE }}" > backend/.env
-          elif [ -f /opt/cs-party-secrets/backend.env ]; then
-            sudo cp /opt/cs-party-secrets/backend.env backend/.env
-            sudo chown $USER:$USER backend/.env
+          elif [ -r /opt/cs-party-secrets/backend.env ]; then
+            cp /opt/cs-party-secrets/backend.env backend/.env
+          elif [ -r "$HOME/cs-party-secrets/backend.env" ]; then
+            cp "$HOME/cs-party-secrets/backend.env" backend/.env
           else
-            echo "No env source found"
+            echo "No env source found. Set BACKEND_ENV_FILE or provide a readable backend.env file."
             exit 1
           fi
-          
+
       - name: Clean up old containers
         run: |
           docker compose down --remove-orphans || true
           docker system prune -f
-          
+
       - name: Build and deploy
         run: |
           docker compose up -d --build --remove-orphans
           docker image prune -f
-          
+
       - name: Show running services
         run: docker compose ps
 
       - name: Verify deployment
         run: |
-          echo "✅ Deployment completed at $(date)"
-          echo "📊 Services status:"
+          echo "Deployment completed at $(date)"
+          echo "Services status:"
           docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
