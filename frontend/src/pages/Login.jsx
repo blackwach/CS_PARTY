@@ -18,8 +18,11 @@ export default function Login() {
       await login(email, password)
       navigate('/rooms')
     } catch (err) {
-      const msg = err.response?.data?.detail || err.response?.data?.email?.[0] || 'Ошибка входа'
-      setError(typeof msg === 'string' ? msg : 'Неверный email или пароль')
+      const d = err.response?.data
+      const msg = typeof d?.detail === 'string' ? d.detail
+        : Array.isArray(d?.detail) ? d.detail[0] : d?.non_field_errors?.[0]
+        || d?.email?.[0] || 'Неверный email или пароль'
+      setError(typeof msg === 'string' ? msg : 'Ошибка входа')
     } finally {
       setLoading(false)
     }

@@ -38,6 +38,24 @@ def generate_username(seed: str) -> str:
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
     username_field = User.EMAIL_FIELD
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Явно принимаем "email" в теле запроса (вместо "username")
+        self.fields[self.username_field] = serializers.CharField(write_only=True)
+        if 'username' in self.fields:
+            del self.fields['username']
+
+    def validate(self, attrs):
+        email = (attrs.get(self.username_field) or attrs.get('email') or '').strip()
+        password = attrs.get('password')
+        if email and password:
+            user = User.objects.filter(email__iexact=email).first()
+            if user and not user.is_active:
+                raise serializers.ValidationError(
+                    'Аккаунт не активирован. Подтвердите email по ссылке из письма после регистрации.'
+                )
+        return super().validate(attrs)
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
