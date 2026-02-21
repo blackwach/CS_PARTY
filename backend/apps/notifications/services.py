@@ -1,9 +1,13 @@
+import logging
+
 import requests
 from django.conf import settings
 from django.core.mail import send_mail
 
 from .models import InAppNotification
 from .realtime import broadcast_notification
+
+logger = logging.getLogger(__name__)
 
 
 def create_notification(
@@ -62,44 +66,48 @@ def notify_room_invitation(room, invited_user) -> None:
         message=f'{host.nickname} invited you to room {room.code}.',
         payload={'room_code': room.code, 'room_title': room.title},
     )
-    text = (
-        f'🎮 Приглашение в CS2\n'
-        f'Хост: {host.nickname}\n'
-        f'Комната: <b>{room.code}</b>\n'
-        f'Сбор: {schedule_text}\n'
-        f'Подтвердить готовность: /ready {room.code}'
-    )
 
+    tg_text = (
+        f'Invitation to CS2 room\n'
+        f'Host: {host.nickname}\n'
+        f'Room code: <b>{room.code}</b>\n'
+        f'Gather time: {schedule_text}\n'
+        f'Mark ready in Telegram: /ready {room.code}'
+    )
     if invited_user.telegram_notifications_enabled and invited_user.telegram_chat_id:
-        send_telegram_message(invited_user.telegram_chat_id, text)
+        send_telegram_message(invited_user.telegram_chat_id, tg_text)
 
-    send_email_message(
-        recipient=invited_user.email,
-        subject='Вас пригласили в CS2 комнату',
-        message=(
-            f'Вас пригласил {host.nickname}.\n'
-            f'Комната: {room.code}\n'
-            f'Время сбора: {schedule_text}\n'
-            f'Подтвердить готовность можно на сайте или командой /ready {room.code} в Telegram.'
-        ),
+    email_subject = 'CS2 room invitation'
+    email_message = (
+        f'{host.nickname} invited you to a CS2 room.\n'
+        f'Room code: {room.code}\n'
+        f'Gather time: {schedule_text}\n'
+        f'You can mark ready on the website or with /ready {room.code} in Telegram.'
     )
+    try:
+        send_email_message(recipient=invited_user.email, subject=email_subject, message=email_message)
+    except Exception as exc:  # pragma: no cover - side effect only
+        logger.warning('Failed to send room invitation email to %s: %s', invited_user.email, exc)
 
 
 def notify_room_reminder(room, member) -> None:
     schedule_text = room.scheduled_for.strftime('%Y-%m-%d %H:%M UTC')
-    text = (
-        f'⏰ До начала сбора 5 минут\n'
-        f'Комната: <b>{room.code}</b>\n'
-        f'Сбор: {schedule_text}\n'
-        f'Если готовы, используйте /ready {room.code}'
+    tg_text = (
+        f'CS2 reminder: 5 minutes left\n'
+        f'Room code: <b>{room.code}</b>\n'
+        f'Gather time: {schedule_text}\n'
+        f'Mark ready: /ready {room.code}'
     )
 
     user = member.user
     if user.telegram_notifications_enabled and user.telegram_chat_id:
-        send_telegram_message(user.telegram_chat_id, text)
+        send_telegram_message(user.telegram_chat_id, tg_text)
 
-    send_email_message(
-        recipient=user.email,
-        subject='Напоминание о сборе CS2 через 5 минут',
-        message=f'Комната {room.code}. Время сбора: {schedule_text}.',
-    )
+    try:
+        send_email_message(
+            recipient=user.email,
+            subject='CS2 reminder: 5 minutes before match',
+            message=f'Room {room.code}. Gather time: {schedule_text}.',
+        )
+    except Exception as exc:  # pragma: no cover - side effect only
+        logger.warning('Failed to send room reminder email to %s: %s', user.email, exc)

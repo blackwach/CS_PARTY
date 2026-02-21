@@ -24,6 +24,38 @@ services:
     networks:
       - cs_party_net
 
+  cs2_stats_service:
+    build:
+      context: ./cs2-stats-service
+    image: cs-party-cs2-stats-service:latest
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      PORT: 3100
+    networks:
+      - cs_party_net
+
+  cs2_server_allocator:
+    build:
+      context: ./cs2-server-allocator
+    image: cs-party-cs2-server-allocator:latest
+    restart: unless-stopped
+    profiles:
+      - allocator-local
+    environment:
+      PORT: 8090
+      CS2_PUBLIC_HOST: ${CS2_PUBLIC_HOST:-127.0.0.1}
+      CS2_IMAGE: ${CS2_IMAGE:-joedwards32/cs2:latest}
+      CS2_PORT_RANGE_START: ${CS2_PORT_RANGE_START:-27100}
+      CS2_PORT_RANGE_END: ${CS2_PORT_RANGE_END:-27200}
+      CS2_REQUIRE_X86: ${CS2_REQUIRE_X86:-true}
+      CS2_SERVER_PASSWORD: ${CS2_SERVER_PASSWORD:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cs_party_net
+
   backend:
     build:
       context: ./backend
@@ -35,6 +67,10 @@ services:
     environment:
       RUN_DB_MIGRATIONS: "1"
       RUN_COLLECTSTATIC: "1"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CHANNEL_REDIS_URL: ${CHANNEL_REDIS_URL:-redis://redis:6379/1}
+      CS2_STATS_API_URL: ${CS2_STATS_API_URL:-http://cs2_stats_service:3100}
+      CS2_STATS_API_TOKEN: ${CS2_STATS_API_TOKEN:-}
     volumes:
       - static_data:/app/staticfiles
       - media_data:/app/media
@@ -42,6 +78,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_started
+      cs2_stats_service:
         condition: service_started
     networks:
       - cs_party_net
@@ -57,12 +95,17 @@ services:
     environment:
       RUN_DB_MIGRATIONS: "0"
       RUN_COLLECTSTATIC: "0"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CS2_STATS_API_URL: ${CS2_STATS_API_URL:-http://cs2_stats_service:3100}
+      CS2_STATS_API_TOKEN: ${CS2_STATS_API_TOKEN:-}
     volumes:
       - media_data:/app/media
     depends_on:
       backend:
         condition: service_started
       redis:
+        condition: service_started
+      cs2_stats_service:
         condition: service_started
     networks:
       - cs_party_net
@@ -78,10 +121,15 @@ services:
     environment:
       RUN_DB_MIGRATIONS: "0"
       RUN_COLLECTSTATIC: "0"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CS2_STATS_API_URL: ${CS2_STATS_API_URL:-http://cs2_stats_service:3100}
+      CS2_STATS_API_TOKEN: ${CS2_STATS_API_TOKEN:-}
     depends_on:
       backend:
         condition: service_started
       redis:
+        condition: service_started
+      cs2_stats_service:
         condition: service_started
     networks:
       - cs_party_net

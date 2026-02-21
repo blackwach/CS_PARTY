@@ -33,6 +33,14 @@ class GameRoom(models.Model):
     max_players = models.PositiveSmallIntegerField(default=5, validators=[MinValueValidator(1), MaxValueValidator(5)])
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_OPEN)
     reminder_sent = models.BooleanField(default=False)
+    server_host = models.CharField(max_length=255, blank=True)
+    server_port = models.PositiveIntegerField(blank=True, null=True)
+    server_password = models.CharField(max_length=128, blank=True)
+    server_connect_url = models.CharField(max_length=1024, blank=True)
+    server_launch_command = models.CharField(max_length=1024, blank=True)
+    server_error = models.CharField(max_length=512, blank=True)
+    server_provider_payload = models.JSONField(default=dict, blank=True)
+    server_provisioned_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -41,6 +49,12 @@ class GameRoom(models.Model):
 
     def __str__(self) -> str:
         return f'{self.code} ({self.title})'
+
+    @property
+    def server_endpoint(self) -> str:
+        if not self.server_host or not self.server_port:
+            return ''
+        return f'{self.server_host}:{self.server_port}'
 
 
 class RoomMembership(models.Model):

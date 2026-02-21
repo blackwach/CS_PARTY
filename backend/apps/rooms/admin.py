@@ -10,7 +10,7 @@ class RoomMembershipInline(admin.TabularInline):
 
 @admin.register(GameRoom)
 class GameRoomAdmin(admin.ModelAdmin):
-    list_display = ('id', 'code', 'title', 'host', 'scheduled_for', 'status', 'max_players')
+    list_display = ('id', 'code', 'title', 'host', 'scheduled_for', 'status', 'server_host', 'server_port', 'max_players')
     search_fields = ('code', 'title', 'host__email', 'host__nickname')
     list_filter = ('status',)
     inlines = [RoomMembershipInline]

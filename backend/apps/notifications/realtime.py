@@ -1,9 +1,13 @@
+import logging
+
 from asgiref.sync import async_to_sync
 try:
     from channels.layers import get_channel_layer
 except Exception:  # pragma: no cover - fallback for local env without channels
     def get_channel_layer():
         return None
+
+logger = logging.getLogger(__name__)
 
 
 def notification_group_name(user_id: int) -> str:
@@ -32,10 +36,13 @@ def broadcast_notification(notification) -> None:
     channel_layer = get_channel_layer()
     if channel_layer is None:
         return
-    async_to_sync(channel_layer.group_send)(
-        notification_group_name(notification.user_id),
-        {
-            'type': 'notify.message',
-            'payload': notification_payload(notification),
-        },
-    )
+    try:
+        async_to_sync(channel_layer.group_send)(
+            notification_group_name(notification.user_id),
+            {
+                'type': 'notify.message',
+                'payload': notification_payload(notification),
+            },
+        )
+    except Exception as exc:  # pragma: no cover - best-effort realtime
+        logger.warning('Notification realtime broadcast skipped: %s', exc)

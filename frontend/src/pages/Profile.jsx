@@ -212,7 +212,7 @@ export default function Profile() {
               type="url"
               value={form.steam_profile_url}
               onChange={handleChange}
-              placeholder="https://steamcommunity.com/profiles/76561198..."
+              placeholder="https://steamcommunity.com/profiles/76561198... или /id/yourname"
             />
           </div>
           <button type="submit" className="btn btn-primary" disabled={loading}>

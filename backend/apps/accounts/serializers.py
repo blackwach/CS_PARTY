@@ -14,13 +14,16 @@ from .services import send_email_change_verification_email, send_verification_em
 
 User = get_user_model()
 
-STEAM_PROFILES_RE = re.compile(r'steamcommunity\.com/profiles/(\d{17})', re.IGNORECASE)
+STEAM_PROFILES_RE = re.compile(r'steamcommunity\.com/profiles/(\d{17})(?:[/?#]|$)', re.IGNORECASE)
+STEAM_ID_RE = re.compile(r'steamcommunity\.com/id/([^/?#]+)(?:[/?#]|$)', re.IGNORECASE)
 
 
 def steam_id_from_profile_url(url: str) -> str | None:
     if not url or not url.strip():
         return None
     url = url.strip()
+    if re.fullmatch(r'\d{17}', url):
+        return url
     match = STEAM_PROFILES_RE.search(url)
     return match.group(1) if match else None
 
@@ -165,15 +168,12 @@ class ProfileSerializer(serializers.ModelSerializer):
         if 'steamcommunity.com/profiles/' in url.lower():
             steam_id = steam_id_from_profile_url(url)
             if not steam_id:
-                raise serializers.ValidationError(
-                    'Используйте формат https://steamcommunity.com/profiles/ВАШ_STEAM_ID с 17 цифрами.'
-                )
-        elif 'steamcommunity.com/id/' in url.lower():
-            raise serializers.ValidationError(
-                'Поддерживается только числовой формат: https://steamcommunity.com/profiles/76561198...'
-            )
+                raise serializers.ValidationError('Use URL in format https://steamcommunity.com/profiles/STEAM_ID64.')
+        elif STEAM_ID_RE.search(url):
+            # Vanity URL is allowed. SteamID64 will be resolved during CS2 sync.
+            pass
         else:
-            raise serializers.ValidationError('Некорректная ссылка на профиль Steam.')
+            raise serializers.ValidationError('Invalid Steam profile URL.')
         return url
 
     def update(self, instance, validated_data):
@@ -187,7 +187,7 @@ class ProfileSerializer(serializers.ModelSerializer):
                 validated_data['steam_account_id'] = ''
                 validated_data['steam_profile_url'] = ''
             else:
-                validated_data['steam_account_id'] = steam_id_from_profile_url(steam_url) or instance.steam_account_id
+                validated_data['steam_account_id'] = steam_id_from_profile_url(steam_url) or ''
 
         updated = super().update(instance, validated_data)
         if requested_email and requested_email.lower() != instance.email.lower():

@@ -1,0 +1,12 @@
+services:
+  allocator:
+    build:
+      context: ../../cs2-server-allocator
+    image: cs-party-cs2-server-allocator:latest
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - "${ALLOCATOR_BIND_IP:-0.0.0.0}:${ALLOCATOR_PORT:-8090}:8090"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

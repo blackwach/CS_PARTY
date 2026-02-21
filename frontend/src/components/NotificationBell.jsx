@@ -15,9 +15,12 @@ export default function NotificationBell() {
 
   useEffect(() => {
     loadNotifications()
+    const pollId = setInterval(loadNotifications, 15000)
     const token = localStorage.getItem('access')
     const wsBase = getWsBase()
-    if (!token || !wsBase) return undefined
+    if (!token || !wsBase) {
+      return () => clearInterval(pollId)
+    }
 
     let socket = null
     try {
@@ -45,6 +48,7 @@ export default function NotificationBell() {
     }
 
     return () => {
+      clearInterval(pollId)
       if (socket) socket.close()
     }
   }, [])

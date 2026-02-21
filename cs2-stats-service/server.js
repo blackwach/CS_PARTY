@@ -12,9 +12,16 @@ const SteamUser = require('steam-user');
 const GlobalOffensive = require('globaloffensive');
 
 const PORT = parseInt(process.env.PORT || '3100', 10);
-const STEAM_USER = process.env.STEAM_USERNAME || process.env.STEAM_USER;
-const STEAM_PASS = process.env.STEAM_PASSWORD;
-const STEAM_2FA = process.env.STEAM_2FA_SECRET; // shared secret для mobile authenticator
+const STEAM_USER =
+  process.env.CS2_STATS_STEAM_USERNAME ||
+  process.env.STEAM_USERNAME ||
+  process.env.STEAM_USER;
+const STEAM_PASS =
+  process.env.CS2_STATS_STEAM_PASSWORD ||
+  process.env.STEAM_PASSWORD;
+const STEAM_2FA =
+  process.env.CS2_STATS_STEAM_2FA_SECRET ||
+  process.env.STEAM_2FA_SECRET; // shared secret для mobile authenticator
 
 // rank_id 0–18 (0 = unranked) → отображаемое имя (Premier / упрощённо)
 const RANK_NAMES = {

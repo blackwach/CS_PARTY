@@ -83,8 +83,10 @@ export const rooms = {
   get: (code) => api.get(`/api/rooms/${code}/`),
   create: (data) => api.post('/api/rooms/', data),
   join: (code) => api.post(`/api/rooms/${code}/join/`),
-  ready: (code) => api.post(`/api/rooms/${code}/ready/`),
+  ready: (code, data = {}) => api.post(`/api/rooms/${code}/ready/`, data),
+  unready: (code) => api.post(`/api/rooms/${code}/unready/`),
   decline: (code) => api.post(`/api/rooms/${code}/decline/`),
+  close: (code) => api.post(`/api/rooms/${code}/close/`),
 }
 
 export const cs2 = {

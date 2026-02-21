@@ -8,7 +8,19 @@ class MyCS2StatsView(views.APIView):
     def get(self, request):
         stats = getattr(request.user, 'cs2_stats', None)
         if not stats:
-            return response.Response({'detail': 'Статистика еще не синхронизирована.'}, status=404)
+            return response.Response(
+                {
+                    'rank': '',
+                    'wins': 0,
+                    'losses': 0,
+                    'total_matches': 0,
+                    'last_synced_at': None,
+                    'recent_matches': [],
+                    'synced': False,
+                    'source': '',
+                    'note': '',
+                }
+            )
         return response.Response(PlayerStatsSerializer(stats).data)
 
 

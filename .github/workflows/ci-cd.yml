@@ -36,6 +36,9 @@ jobs:
       - name: Django checks
         run: python manage.py check
 
+      - name: Validate allocator syntax
+        run: python3 -m py_compile ../cs2-server-allocator/app.py
+
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux]
@@ -79,7 +82,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          required_services=(backend celery_worker celery_beat frontend db redis)
+          required_services=(backend celery_worker celery_beat frontend db redis cs2_stats_service)
           running_services="$(docker compose ps --services --status running)"
           for service in "${required_services[@]}"; do
             if ! grep -qx "$service" <<< "$running_services"; then
@@ -94,3 +97,48 @@ jobs:
           echo "Deployment completed at $(date)"
           echo "Services status:"
           docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+
+  # Optional job. Enable by setting repository variable DEPLOY_ALLOCATOR=true.
+  deploy-cs2-allocator:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ALLOCATOR == 'true'
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 20
+    needs: test
+    concurrency:
+      group: cs-party-allocator
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare allocator env
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ secrets.ALLOCATOR_ENV_FILE }}" ]; then
+            printf "%s" "${{ secrets.ALLOCATOR_ENV_FILE }}" > infra/cs2-allocator/.env
+          elif [ -r /opt/cs-party-secrets/allocator.env ]; then
+            cp /opt/cs-party-secrets/allocator.env infra/cs2-allocator/.env
+          elif [ -r "$HOME/cs-party-secrets/allocator.env" ]; then
+            cp "$HOME/cs-party-secrets/allocator.env" infra/cs2-allocator/.env
+          else
+            echo "No env source found. Set ALLOCATOR_ENV_FILE or provide allocator.env on runner."
+            exit 1
+          fi
+
+      - name: Deploy allocator locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f infra/cs2-allocator/docker-compose.yml --env-file infra/cs2-allocator/.env down --remove-orphans || true
+          docker compose -f infra/cs2-allocator/docker-compose.yml --env-file infra/cs2-allocator/.env up -d --build --remove-orphans
+          docker compose -f infra/cs2-allocator/docker-compose.yml --env-file infra/cs2-allocator/.env ps
+
+      - name: Verify allocator health
+        shell: bash
+        run: |
+          set -euo pipefail
+          ALLOCATOR_URL="$(grep -E '^ALLOCATOR_PUBLIC_URL=' infra/cs2-allocator/.env | head -n1 | cut -d '=' -f2-)"
+          if [ -z "$ALLOCATOR_URL" ]; then
+            ALLOCATOR_URL="http://127.0.0.1:8090"
+          fi
+          curl --fail --show-error --silent "$ALLOCATOR_URL/health"
