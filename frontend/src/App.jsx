@@ -6,11 +6,14 @@ import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import VerifyEmail from './pages/VerifyEmail'
+import DeleteAccountConfirm from './pages/DeleteAccountConfirm'
 import Profile from './pages/Profile'
+import UserProfile from './pages/UserProfile'
 import Rooms from './pages/Rooms'
 import RoomDetail from './pages/RoomDetail'
 import CreateRoom from './pages/CreateRoom'
 import CS2Stats from './pages/CS2Stats'
+import Chat from './pages/Chat'
 import Home from './pages/Home'
 
 function ProtectedRoute({ children }) {
@@ -49,7 +52,10 @@ export default function App() {
         <Route path="forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
         <Route path="reset-password" element={<PublicOnly><ResetPassword /></PublicOnly>} />
         <Route path="verify-email/:token" element={<PublicOnly><VerifyEmail /></PublicOnly>} />
+        <Route path="delete-account/:token" element={<DeleteAccountConfirm />} />
         <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="users/:id" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+        <Route path="chat/:userId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
         <Route path="rooms" element={<ProtectedRoute><Rooms /></ProtectedRoute>} />
         <Route path="rooms/create" element={<ProtectedRoute><CreateRoom /></ProtectedRoute>} />
         <Route path="rooms/:code" element={<ProtectedRoute><RoomDetail /></ProtectedRoute>} />

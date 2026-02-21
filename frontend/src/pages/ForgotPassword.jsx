@@ -18,7 +18,7 @@ export default function ForgotPassword() {
     } catch (err) {
       const msg = err.response?.data?.detail
       const text = typeof msg === 'string' ? msg : Array.isArray(msg) ? msg[0] : null
-      setError(text || 'Не удалось отправить письмо. Попробуйте позже или обратитесь к администратору.')
+      setError(text || 'Не удалось отправить письмо. Попробуйте позже.')
     } finally {
       setLoading(false)
     }
@@ -27,9 +27,7 @@ export default function ForgotPassword() {
   if (done) {
     return (
       <div className="panel" style={{ maxWidth: 400, margin: '2rem auto' }}>
-        <div className="alert alert-success">
-          Если аккаунт с таким email существует, на него отправлена ссылка для сброса пароля.
-        </div>
+        <div className="alert alert-success">Если аккаунт с таким email существует, ссылка для сброса уже отправлена.</div>
         <Link to="/login" className="btn btn-primary">К входу</Link>
       </div>
     )
@@ -38,24 +36,15 @@ export default function ForgotPassword() {
   return (
     <div className="panel" style={{ maxWidth: 400, margin: '2rem auto' }}>
       <h2 className="page-title">Восстановление пароля</h2>
-      <p className="page-subtitle">Введите email — отправим ссылку для сброса</p>
+      <p className="page-subtitle">Введите email, чтобы получить ссылку для сброса</p>
       {error && <div className="alert alert-error">{error}</div>}
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
+          <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Отправка…' : 'Отправить'}
-          </button>
+          <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Отправка...' : 'Отправить'}</button>
           <Link to="/login" className="btn btn-ghost">Назад</Link>
         </div>
       </form>

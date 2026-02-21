@@ -1,6 +1,30 @@
-﻿from django.conf import settings
-from django.core.mail import send_mail
 import requests
+from django.conf import settings
+from django.core.mail import send_mail
+
+from .models import InAppNotification
+from .realtime import broadcast_notification
+
+
+def create_notification(
+    *,
+    user,
+    notification_type: str,
+    title: str,
+    message: str = '',
+    payload: dict | None = None,
+    actor=None,
+) -> InAppNotification:
+    notification = InAppNotification.objects.create(
+        user=user,
+        actor=actor,
+        type=notification_type,
+        title=title,
+        message=message,
+        payload=payload or {},
+    )
+    broadcast_notification(notification)
+    return notification
 
 
 def send_telegram_message(chat_id: int, text: str) -> bool:
@@ -30,6 +54,14 @@ def send_email_message(recipient: str, subject: str, message: str) -> None:
 def notify_room_invitation(room, invited_user) -> None:
     host = room.host
     schedule_text = room.scheduled_for.strftime('%Y-%m-%d %H:%M UTC')
+    create_notification(
+        user=invited_user,
+        actor=host,
+        notification_type=InAppNotification.TYPE_ROOM_INVITE,
+        title='Room invitation',
+        message=f'{host.nickname} invited you to room {room.code}.',
+        payload={'room_code': room.code, 'room_title': room.title},
+    )
     text = (
         f'🎮 Приглашение в CS2\n'
         f'Хост: {host.nickname}\n'

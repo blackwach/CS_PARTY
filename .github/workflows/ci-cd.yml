@@ -75,6 +75,20 @@ jobs:
       - name: Show running services
         run: docker compose ps
 
+      - name: Verify required services are running
+        shell: bash
+        run: |
+          set -euo pipefail
+          required_services=(backend celery_worker celery_beat frontend db redis)
+          running_services="$(docker compose ps --services --status running)"
+          for service in "${required_services[@]}"; do
+            if ! grep -qx "$service" <<< "$running_services"; then
+              echo "Required service is not running: $service"
+              docker compose ps
+              exit 1
+            fi
+          done
+
       - name: Verify deployment
         run: |
           echo "Deployment completed at $(date)"

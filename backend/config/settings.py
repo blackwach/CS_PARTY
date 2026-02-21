@@ -1,4 +1,5 @@
 import os
+import importlib.util
 from pathlib import Path
 from datetime import timedelta
 
@@ -15,6 +16,10 @@ DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() == 'true'
 ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,192.168.31.28,cs2party.duckdns.org').split(',') if host.strip()]
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost')
 
+HAS_DAPHNE = importlib.util.find_spec('daphne') is not None
+HAS_CHANNELS = importlib.util.find_spec('channels') is not None
+HAS_CHANNELS_REDIS = importlib.util.find_spec('channels_redis') is not None
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -30,6 +35,11 @@ INSTALLED_APPS = [
     'apps.cs2',
     'apps.notifications',
 ]
+
+if HAS_DAPHNE:
+    INSTALLED_APPS.insert(0, 'daphne')
+if HAS_CHANNELS:
+    INSTALLED_APPS.insert(1 if HAS_DAPHNE else 0, 'channels')
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -116,10 +126,26 @@ EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() == 'true'
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
-CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
-CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('CORS_ALLOWED_ORIGINS', '127.0.0.1').split(',') if origin.strip()]
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost,http://127.0.0.1,https://localhost,https://127.0.0.1').split(',') if origin.strip()]
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost,http://127.0.0.1,https://localhost,https://127.0.0.1').split(',') if origin.strip()]
 
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+CHANNEL_REDIS_URL = os.getenv('CHANNEL_REDIS_URL', REDIS_URL)
+if HAS_CHANNELS_REDIS:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [CHANNEL_REDIS_URL],
+            },
+        },
+    }
+elif HAS_CHANNELS:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_TIMEZONE = TIME_ZONE
@@ -132,6 +158,10 @@ CELERY_BEAT_SCHEDULE = {
     'sync-cs2-stats-every-30-minutes': {
         'task': 'apps.cs2.tasks.sync_all_cs2_stats_task',
         'schedule': 30 * 60.0,
+    },
+    'enforce-email-verification-timeouts-every-minute': {
+        'task': 'apps.accounts.tasks.enforce_email_verification_timeouts_task',
+        'schedule': 60.0,
     },
 }
 

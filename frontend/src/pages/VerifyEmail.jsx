@@ -4,15 +4,16 @@ import { auth } from '../api'
 
 export default function VerifyEmail() {
   const { token } = useParams()
-  const [status, setStatus] = useState('loading') // loading | success | error
+  const [status, setStatus] = useState('loading')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
     if (!token) {
       setStatus('error')
-      setMessage('Нет токена в ссылке.')
+      setMessage('В ссылке отсутствует токен.')
       return
     }
+
     auth
       .verifyEmail(token)
       .then((res) => {

@@ -24,7 +24,7 @@ export default function CS2Stats() {
       .then((res) => setStats(res.data))
       .catch((err) => {
         if (err.response?.status === 404) setStats(null)
-        else setError(err.response?.data?.detail || 'Не удалось загрузить статистику')
+        else setError(err.response?.data?.detail || 'Не удалось загрузить статистику CS2.')
       })
       .finally(() => setLoading(false))
   }
@@ -39,7 +39,7 @@ export default function CS2Stats() {
     cs2Api
       .sync()
       .then((res) => setStats(res.data))
-      .catch((err) => setError(err.response?.data?.detail || 'Ошибка синхронизации'))
+      .catch((err) => setError(err.response?.data?.detail || 'Ошибка синхронизации статистики.'))
       .finally(() => setSyncing(false))
   }
 
@@ -55,26 +55,18 @@ export default function CS2Stats() {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
         <h1 className="page-title" style={{ margin: 0 }}>CS2 статистика</h1>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={sync}
-          disabled={syncing}
-        >
-          {syncing ? 'Синхронизация…' : 'Синхронизировать'}
+        <button type="button" className="btn btn-primary" onClick={sync} disabled={syncing}>
+          {syncing ? 'Синхронизация...' : 'Синхронизировать'}
         </button>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
 
-      {/* Карточка игрока: профиль Steam и данные для статистики */}
       <div className="panel" style={{ marginBottom: '1rem' }}>
-        <h2 style={{ marginTop: 0 }}>Игрок</h2>
+        <h2 style={{ marginTop: 0 }}>-грок</h2>
         <p style={{ margin: '0 0 0.5rem', fontWeight: 600 }}>{user?.nickname || '—'}</p>
         {steamProfileUrl ? (
           <p style={{ margin: 0, fontSize: '0.9rem' }}>
-            <a href={steamProfileUrl} target="_blank" rel="noopener noreferrer">
-              Профиль Steam
-            </a>
+            <a href={steamProfileUrl} target="_blank" rel="noopener noreferrer">Профиль Steam</a>
             <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
               (можно изменить в <Link to="/profile">профиле</Link>)
             </span>
@@ -90,14 +82,14 @@ export default function CS2Stats() {
         <div className="panel">
           <p style={{ color: 'var(--text-muted)' }}>
             {steamProfileUrl
-              ? 'Нажмите «Синхронизировать», чтобы подтянуть ранг и историю матчей с платформы Steam.'
-              : 'Укажите ссылку на профиль Steam в профиле и нажмите «Синхронизировать».'}
+              ? 'Нажмите «Синхронизировать», чтобы подтянуть ранг и последние матчи из Steam.'
+              : 'Добавьте ссылку на профиль Steam и запустите синхронизацию.'}
           </p>
         </div>
       ) : (
         <>
           <div className="panel">
-            <h2>Общее</h2>
+            <h2>Общая статистика</h2>
             <div className="stat-grid">
               <div className="stat-box">
                 <div className="stat-value">{stats.rank || '—'}</div>

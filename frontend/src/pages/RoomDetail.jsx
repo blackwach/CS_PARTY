@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { rooms as roomsApi } from '../api'
 
@@ -10,11 +10,12 @@ const statusLabels = {
   finished: 'Завершена',
   cancelled: 'Отменена',
 }
+
 const stateLabels = {
-  invited: 'Приглашён',
-  joined: 'Вошёл',
+  invited: 'Приглашен',
+  joined: 'Присоединился',
   ready: 'Готов',
-  declined: 'Отказался',
+  declined: 'Отклонил',
 }
 
 function formatDate(d) {
@@ -40,7 +41,7 @@ export default function RoomDetail() {
     roomsApi
       .get(code)
       .then((res) => setRoom(res.data))
-      .catch(() => setError('Комната не найдена'))
+      .catch(() => setError('Комната не найдена.'))
       .finally(() => setLoading(false))
   }
 
@@ -53,7 +54,7 @@ export default function RoomDetail() {
     setError('')
     roomsApi[action](code)
       .then((res) => setRoom(res.data))
-      .catch((err) => setError(err.response?.data?.detail || 'Ошибка'))
+      .catch((err) => setError(err.response?.data?.detail || 'Не удалось выполнить действие.'))
       .finally(() => setActionLoading(false))
   }
 
@@ -70,7 +71,7 @@ export default function RoomDetail() {
       <div className="panel">
         <div className="alert alert-error">{error}</div>
         <button type="button" className="btn btn-secondary" onClick={() => navigate('/rooms')}>
-          К списку комнат
+          Назад к комнатам
         </button>
       </div>
     )
@@ -82,16 +83,11 @@ export default function RoomDetail() {
   return (
     <>
       <div style={{ marginBottom: '1rem' }}>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => navigate('/rooms')}
-          style={{ marginBottom: '0.5rem' }}
-        >
-          ← К комнатам
+        <button type="button" className="btn btn-ghost" onClick={() => navigate('/rooms')} style={{ marginBottom: '0.5rem' }}>
+          Назад
         </button>
         <h1 className="page-title">{room?.title}</h1>
-        <p className="card-meta">Код: {room?.code} · {formatDate(room?.scheduled_for)}</p>
+        <p className="card-meta">Код: {room?.code} | {formatDate(room?.scheduled_for)}</p>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
 
@@ -107,45 +103,28 @@ export default function RoomDetail() {
 
         {myState === 'invited' && (
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => doAction('join')}
-              disabled={actionLoading}
-            >
+            <button type="button" className="btn btn-primary" onClick={() => doAction('join')} disabled={actionLoading}>
               Войти в комнату
             </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={() => doAction('decline')}
-              disabled={actionLoading}
-            >
-              Отказаться
+            <button type="button" className="btn btn-danger" onClick={() => doAction('decline')} disabled={actionLoading}>
+              Отклонить
             </button>
           </div>
         )}
         {myState === 'joined' && (
           <div style={{ marginBottom: '1rem' }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => doAction('ready')}
-              disabled={actionLoading}
-            >
-              Готов к игре
+            <button type="button" className="btn btn-primary" onClick={() => doAction('ready')} disabled={actionLoading}>
+              Готов
             </button>
           </div>
         )}
-        {myState === 'ready' && (
-          <p style={{ color: 'var(--accent)' }}>Вы отметились как готовы.</p>
-        )}
+        {myState === 'ready' && <p style={{ color: 'var(--accent)' }}>Вы отмечены как готовый.</p>}
 
-        <h3 style={{ margin: '1rem 0 0.5rem', fontSize: '1rem' }}>Участники</h3>
+        <h3 style={{ margin: '1rem 0 0.5rem', fontSize: '1rem' }}>Игроки</h3>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {(room?.memberships || []).map((m) => (
+          {(room?.memberships || []).map((membership) => (
             <li
-              key={m.id}
+              key={membership.id}
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -154,9 +133,16 @@ export default function RoomDetail() {
                 borderBottom: '1px solid var(--border)',
               }}
             >
-              <span>{m.user?.nickname || '—'}</span>
-              <span className={`badge badge-${m.state === 'ready' ? 'joined' : m.state === 'declined' ? 'declined' : m.state === 'invited' ? 'invited' : 'joined'}`}>
-                {stateLabels[m.state] || m.state}
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <Link to={`/users/${membership.user?.id}`}>{membership.user?.nickname || '-'}</Link>
+                {membership.user?.id !== currentUser?.id && (
+                  <Link to={`/chat/${membership.user?.id}`} className="btn btn-ghost" style={{ padding: '0.15rem 0.4rem' }}>
+                    Чат
+                  </Link>
+                )}
+              </div>
+              <span className={`badge badge-${membership.state === 'ready' ? 'joined' : membership.state === 'declined' ? 'declined' : membership.state === 'invited' ? 'invited' : 'joined'}`}>
+                {stateLabels[membership.state] || membership.state}
               </span>
             </li>
           ))}

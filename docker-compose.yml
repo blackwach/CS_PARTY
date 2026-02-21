@@ -29,7 +29,7 @@ services:
       context: ./backend
     image: cs-party-backend:latest
     restart: unless-stopped
-    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4
+    command: gunicorn config.asgi:application --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 4
     env_file:
       - ./backend/.env
     environment:

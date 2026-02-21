@@ -1,20 +1,26 @@
+import { useState } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import FriendsPanel from './FriendsPanel'
+import NotificationBell from './NotificationBell'
 
 export default function Layout() {
   const { logout, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const [friendsOpen, setFriendsOpen] = useState(true)
 
   const pageVariant = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password') || pathname.startsWith('/reset-password') || pathname.startsWith('/verify-email')
     ? 'auth'
     : pathname.startsWith('/rooms')
       ? 'rooms'
-      : pathname.startsWith('/profile')
+      : pathname.startsWith('/profile') || pathname.startsWith('/users')
         ? 'profile'
-        : pathname.startsWith('/cs2')
-          ? 'cs2'
-          : 'home'
+        : pathname.startsWith('/chat')
+          ? 'rooms'
+          : pathname.startsWith('/cs2')
+            ? 'cs2'
+            : 'home'
 
   const handleLogout = () => {
     logout()
@@ -22,7 +28,7 @@ export default function Layout() {
   }
 
   return (
-    <div className={`app-layout page-${pageVariant}`}>
+    <div className={`app-layout page-${pageVariant} ${isAuthenticated ? 'has-friends' : ''}`}>
       <header className="app-header">
         <Link to="/" className="app-brand">
           CS <span>Party</span>
@@ -34,6 +40,10 @@ export default function Layout() {
               <Link to="/rooms/create">Создать</Link>
               <Link to="/cs2">CS2</Link>
               <Link to="/profile">Профиль</Link>
+              <button type="button" className="btn btn-ghost friends-toggle-btn" onClick={() => setFriendsOpen((v) => !v)}>
+                Друзья
+              </button>
+              <NotificationBell />
               <button type="button" onClick={handleLogout}>Выйти</button>
             </>
           ) : (
@@ -47,6 +57,9 @@ export default function Layout() {
       <main className="main">
         <Outlet />
       </main>
+      {isAuthenticated && (
+        <FriendsPanel isVisible={friendsOpen} onClose={() => setFriendsOpen(false)} />
+      )}
     </div>
   )
 }

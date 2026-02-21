@@ -3,7 +3,9 @@ import string
 from datetime import date
 
 from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 
@@ -54,10 +56,14 @@ class User(AbstractUser):
     nickname = models.CharField(max_length=40, unique=True)
     birth_date = models.DateField()
     initials = models.CharField(max_length=16)
+    about = models.TextField(blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     steam_account_id = models.CharField(max_length=64, blank=True)
     steam_profile_url = models.URLField(max_length=512, blank=True)
     is_email_verified = models.BooleanField(default=False)
+    pending_email = models.EmailField(blank=True)
+    pending_email_previous = models.EmailField(blank=True)
+    pending_email_expires_at = models.DateTimeField(blank=True, null=True)
     telegram_chat_id = models.BigIntegerField(unique=True, blank=True, null=True)
     telegram_username = models.CharField(max_length=255, blank=True)
     telegram_notifications_enabled = models.BooleanField(default=True)
@@ -71,16 +77,23 @@ class User(AbstractUser):
     def __str__(self) -> str:
         return f'{self.nickname} <{self.email}>'
 
+    def clear_pending_email_change(self) -> None:
+        self.pending_email = ''
+        self.pending_email_previous = ''
+        self.pending_email_expires_at = None
+
 
 class EmailActionToken(models.Model):
     VERIFY_EMAIL = 'verify_email'
     RESET_PASSWORD = 'reset_password'
     TELEGRAM_LINK = 'telegram_link'
+    DELETE_ACCOUNT = 'delete_account'
 
     ACTION_CHOICES = [
         (VERIFY_EMAIL, 'Verify email'),
         (RESET_PASSWORD, 'Reset password'),
         (TELEGRAM_LINK, 'Telegram link'),
+        (DELETE_ACCOUNT, 'Delete account'),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='action_tokens')
@@ -104,3 +117,101 @@ class EmailActionToken(models.Model):
     def mark_used(self) -> None:
         self.used_at = timezone.now()
         self.save(update_fields=['used_at'])
+
+
+class Friendship(models.Model):
+    user_low = models.ForeignKey(User, on_delete=models.CASCADE, related_name='friendships_low')
+    user_high = models.ForeignKey(User, on_delete=models.CASCADE, related_name='friendships_high')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['user_low', 'user_high'], name='unique_friendship_pair'),
+            models.CheckConstraint(check=~Q(user_low=models.F('user_high')), name='friendship_users_not_equal'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.user_low_id and self.user_high_id and self.user_low_id > self.user_high_id:
+            self.user_low_id, self.user_high_id = self.user_high_id, self.user_low_id
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        if self.user_low_id and self.user_high_id and self.user_low_id == self.user_high_id:
+            raise ValidationError('Friendship users must be different.')
+
+    def __str__(self) -> str:
+        return f'{self.user_low_id}<->{self.user_high_id}'
+
+
+class FriendRequest(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_ACCEPTED = 'accepted'
+    STATUS_DECLINED = 'declined'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_ACCEPTED, 'Accepted'),
+        (STATUS_DECLINED, 'Declined'),
+        (STATUS_CANCELLED, 'Cancelled'),
+    ]
+
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_friend_requests')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_friend_requests')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['receiver', 'status']),
+            models.Index(fields=['sender', 'status']),
+        ]
+        constraints = [
+            models.CheckConstraint(check=~Q(sender=models.F('receiver')), name='friend_request_users_not_equal'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.sender_id}->{self.receiver_id}:{self.status}'
+
+
+class DirectConversation(models.Model):
+    user_low = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_conversations_low')
+    user_high = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_conversations_high')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        constraints = [
+            models.UniqueConstraint(fields=['user_low', 'user_high'], name='unique_direct_conversation_pair'),
+            models.CheckConstraint(check=~Q(user_low=models.F('user_high')), name='direct_conversation_users_not_equal'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.user_low_id and self.user_high_id and self.user_low_id > self.user_high_id:
+            self.user_low_id, self.user_high_id = self.user_high_id, self.user_low_id
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f'conversation:{self.user_low_id}-{self.user_high_id}'
+
+
+class DirectMessage(models.Model):
+    conversation = models.ForeignKey(DirectConversation, on_delete=models.CASCADE, related_name='messages')
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='direct_messages_sent')
+    text = models.TextField(max_length=4000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['conversation', 'created_at']),
+            models.Index(fields=['sender', 'created_at']),
+        ]
+
+    def __str__(self) -> str:
+        return f'msg:{self.id} conv:{self.conversation_id} sender:{self.sender_id}'

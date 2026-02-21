@@ -1,11 +1,20 @@
 import axios from 'axios'
 
 const baseURL = import.meta.env.VITE_API_URL || ''
+const wsBaseURL = import.meta.env.VITE_WS_URL || ''
 
 export const api = axios.create({
   baseURL,
-  headers: { 'Content-Type': 'application/json' },
 })
+
+export function getWsBase() {
+  if (wsBaseURL) return wsBaseURL.replace(/\/$/, '')
+  if (typeof window !== 'undefined') {
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${proto}://${window.location.host}`
+  }
+  return ''
+}
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access')
@@ -42,16 +51,31 @@ export const auth = {
   register: (body) => api.post('/api/auth/register/', body),
   refresh: () => api.post('/api/auth/token/refresh/', { refresh: localStorage.getItem('refresh') }),
   me: () => api.get('/api/auth/me/'),
+  updateMe: (payload, config = {}) => api.patch('/api/auth/me/', payload, config),
+  getUserProfile: (userId) => api.get(`/api/auth/users/${userId}/`),
   verifyEmail: (token) => api.get('/api/auth/verify-email/', { params: { token } }),
   passwordResetRequest: (email) => api.post('/api/auth/password-reset/request/', { email }),
   passwordResetConfirm: (token, new_password) =>
     api.post('/api/auth/password-reset/confirm/', { token, new_password }),
+  deleteAccountRequest: () => api.post('/api/auth/delete-account/request/'),
+  deleteAccountConfirm: (token) => api.post('/api/auth/delete-account/confirm/', { token }),
   passwordChange: (old_password, new_password) =>
     api.post('/api/auth/password-change/', { old_password, new_password }),
   usersSearch: (q) => api.get('/api/auth/users/search/', { params: { q } }),
   allowedInviters: (inviter_ids) => api.post('/api/auth/permissions/inviters/', { inviter_ids }),
   telegramLinkCode: () => api.post('/api/auth/telegram/link-code/'),
   telegramToggle: (enabled) => api.post('/api/auth/telegram/toggle/', { enabled }),
+  friends: () => api.get('/api/auth/friends/'),
+  friendRequestCreate: (user_id) => api.post('/api/auth/friends/request/', { user_id }),
+  friendRequestsIncoming: () => api.get('/api/auth/friends/requests/incoming/'),
+  friendRequestAccept: (request_id) => api.post(`/api/auth/friends/requests/${request_id}/accept/`),
+  friendRequestDecline: (request_id) => api.post(`/api/auth/friends/requests/${request_id}/decline/`),
+  notifications: () => api.get('/api/auth/notifications/'),
+  notificationRead: (notification_id) => api.post(`/api/auth/notifications/${notification_id}/read/`),
+  notificationsReadAll: () => api.post('/api/auth/notifications/read-all/'),
+  chats: () => api.get('/api/auth/chats/'),
+  chatMessages: (user_id) => api.get(`/api/auth/chats/${user_id}/messages/`),
+  chatSend: (user_id, text) => api.post(`/api/auth/chats/${user_id}/messages/`, { text }),
 }
 
 export const rooms = {

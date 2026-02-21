@@ -14,11 +14,11 @@ export default function ResetPassword() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (password !== passwordConfirm) {
-      setError('Пароли не совпадают')
+      setError('Пароли не совпадают.')
       return
     }
     if (password.length < 8) {
-      setError('Пароль не менее 8 символов')
+      setError('Пароль должен быть не короче 8 символов.')
       return
     }
     setError('')
@@ -37,7 +37,7 @@ export default function ResetPassword() {
   if (success) {
     return (
       <div className="panel" style={{ maxWidth: 400, margin: '2rem auto' }}>
-        <div className="alert alert-success">Пароль успешно изменён.</div>
+        <div className="alert alert-success">Пароль успешно изменен.</div>
         <Link to="/login" className="btn btn-primary">Войти</Link>
       </div>
     )
@@ -46,7 +46,7 @@ export default function ResetPassword() {
   if (!token) {
     return (
       <div className="panel" style={{ maxWidth: 400, margin: '2rem auto' }}>
-        <div className="alert alert-error">Нет токена в ссылке. Используйте ссылку из письма.</div>
+        <div className="alert alert-error">В ссылке отсутствует токен. -спользуйте ссылку из письма.</div>
         <Link to="/forgot-password" className="btn btn-primary">Запросить сброс</Link>
       </div>
     )
@@ -59,32 +59,14 @@ export default function ResetPassword() {
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="password">Новый пароль (мин. 8)</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-          />
+          <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
         </div>
         <div className="form-group">
           <label htmlFor="password_confirm">Повторите пароль</label>
-          <input
-            id="password_confirm"
-            type="password"
-            value={passwordConfirm}
-            onChange={(e) => setPasswordConfirm(e.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-          />
+          <input id="password_confirm" type="password" value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} required minLength={8} autoComplete="new-password" />
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Сохранение…' : 'Сохранить'}
-          </button>
+          <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Сохранение...' : 'Сохранить'}</button>
           <Link to="/login" className="btn btn-ghost">Отмена</Link>
         </div>
       </form>

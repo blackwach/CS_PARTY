@@ -151,6 +151,11 @@ input, button, select, textarea {
   z-index: 1;
 }
 
+.app-layout.has-friends .main {
+  width: min(960px, calc(100% - 22rem));
+  margin-right: 19rem;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -380,4 +385,303 @@ input, button, select, textarea {
   align-items: center;
   justify-content: center;
   padding: 2rem;
+}
+
+.notification-wrap {
+  position: relative;
+}
+.notification-btn {
+  position: relative;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: var(--radius);
+  cursor: pointer;
+  padding: 0.45rem 0.65rem;
+}
+.notification-icon {
+  font-size: 1rem;
+}
+.notification-badge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 1rem;
+  text-align: center;
+}
+.notification-popover {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  width: min(480px, 90vw);
+  max-height: 70vh;
+  overflow: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem;
+  z-index: 60;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.notification-popover-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.notification-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.notification-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.65rem;
+  background: var(--bg-elevated);
+}
+.notification-item.is-read {
+  opacity: 0.75;
+}
+.notification-texts p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.notification-actions {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.notification-empty {
+  color: var(--text-muted);
+  margin: 0.35rem 0;
+}
+
+.friends-toggle-btn {
+  margin-left: 0.25rem;
+}
+
+.friends-panel {
+  position: fixed;
+  right: 0.75rem;
+  top: 4.4rem;
+  width: 17.5rem;
+  height: calc(100vh - 5.2rem);
+  background: rgba(13, 18, 25, 0.97);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: none;
+  flex-direction: column;
+  z-index: 45;
+}
+.friends-panel.is-visible {
+  display: flex;
+}
+.friends-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.friends-panel-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.friends-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.6rem;
+  overflow: auto;
+  flex: 1;
+}
+.friends-list-item {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+.friend-avatar-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+  background: var(--bg-elevated);
+}
+.friend-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.friend-avatar-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text);
+  font-weight: 700;
+}
+.friend-chat-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  cursor: pointer;
+}
+.friend-chat-btn:hover {
+  border-color: rgba(34, 197, 94, 0.45);
+}
+.friends-panel-footer {
+  border-top: 1px solid var(--border);
+  padding: 0.65rem 0.75rem;
+}
+.friends-empty {
+  color: var(--text-muted);
+  padding: 0.75rem;
+  margin: 0;
+}
+
+.profile-avatar-row {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+.profile-avatar-wrap {
+  width: 7rem;
+  height: 7rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.profile-avatar-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.profile-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 700;
+  background: var(--bg-elevated);
+}
+
+.user-profile-panel {
+  max-width: 48rem;
+}
+.user-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.user-profile-avatar {
+  width: 6rem;
+  height: 6rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  object-fit: cover;
+}
+.user-profile-avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  background: var(--bg-elevated);
+}
+.user-profile-meta {
+  margin: 0.2rem 0;
+  color: var(--text-muted);
+}
+.user-profile-about {
+  margin: 1rem 0;
+}
+.user-profile-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.chat-panel {
+  max-width: 50rem;
+}
+.chat-messages {
+  max-height: 28rem;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.chat-bubble {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.65rem;
+  background: var(--bg-elevated);
+}
+.chat-bubble.is-mine {
+  border-color: rgba(34, 197, 94, 0.4);
+}
+.chat-bubble-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.chat-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+@media (max-width: 1100px) {
+  .app-layout.has-friends .main {
+    width: min(960px, calc(100% - 2rem));
+    margin-right: auto;
+  }
+  .friends-panel {
+    width: min(24rem, calc(100vw - 1.5rem));
+  }
+}
+
+@media (max-width: 700px) {
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .app-nav {
+    flex-wrap: wrap;
+  }
+  .profile-avatar-row {
+    grid-template-columns: 1fr;
+  }
+  .user-profile-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .chat-form {
+    grid-template-columns: 1fr;
+  }
 }

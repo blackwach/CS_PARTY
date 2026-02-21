@@ -19,10 +19,8 @@ export default function Login() {
       navigate('/rooms')
     } catch (err) {
       const d = err.response?.data
-      const msg = typeof d?.detail === 'string' ? d.detail
-        : Array.isArray(d?.detail) ? d.detail[0] : d?.non_field_errors?.[0]
-        || d?.email?.[0] || 'Неверный email или пароль'
-      setError(typeof msg === 'string' ? msg : 'Ошибка входа')
+      const msg = (typeof d?.detail === 'string' ? d.detail : Array.isArray(d?.detail) ? d.detail[0] : d?.non_field_errors?.[0]) || d?.email?.[0] || 'Неверный email или пароль.'
+      setError(typeof msg === 'string' ? msg : 'Ошибка входа.')
     } finally {
       setLoading(false)
     }
@@ -59,7 +57,7 @@ export default function Login() {
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Вход…' : 'Войти'}
+            {loading ? 'Вход...' : 'Войти'}
           </button>
           <Link to="/forgot-password" className="btn btn-ghost">Забыли пароль?</Link>
         </div>

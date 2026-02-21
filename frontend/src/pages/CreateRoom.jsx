@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { rooms as roomsApi } from '../api'
-import { auth as authApi } from '../api'
+import { auth as authApi, rooms as roomsApi } from '../api'
 
 export default function CreateRoom() {
   const navigate = useNavigate()
@@ -36,12 +35,12 @@ export default function CreateRoom() {
     e.preventDefault()
     setError('')
     if (!title.trim()) {
-      setError('Укажите название комнаты')
+      setError('Укажите название комнаты.')
       return
     }
     const at = scheduledFor ? new Date(scheduledFor).toISOString() : null
     if (!at || new Date(at) <= new Date()) {
-      setError('Укажите время в будущем')
+      setError('Выберите дату и время в будущем.')
       return
     }
     setLoading(true)
@@ -53,8 +52,8 @@ export default function CreateRoom() {
       })
       navigate(`/rooms/${data.code}`)
     } catch (err) {
-      const d = err.response?.data
-      setError(d?.scheduled_for?.[0] || d?.title?.[0] || 'Ошибка создания комнаты')
+      const data = err.response?.data
+      setError(data?.scheduled_for?.[0] || data?.title?.[0] || data?.detail || 'Не удалось создать комнату.')
     } finally {
       setLoading(false)
     }
@@ -69,7 +68,7 @@ export default function CreateRoom() {
   return (
     <>
       <h1 className="page-title">Создать комнату</h1>
-      <p className="page-subtitle">До 5 игроков. Укажите время сбора и пригласите участников.</p>
+      <p className="page-subtitle">До 5 игроков. Выберите дату/время и пригласите друзей.</p>
       {error && <div className="alert alert-error">{error}</div>}
 
       <form onSubmit={handleSubmit} className="panel">
@@ -86,7 +85,7 @@ export default function CreateRoom() {
           />
         </div>
         <div className="form-group">
-          <label htmlFor="scheduled_for">Время сбора</label>
+          <label htmlFor="scheduled_for">Запланировано на</label>
           <input
             id="scheduled_for"
             type="datetime-local"
@@ -98,7 +97,7 @@ export default function CreateRoom() {
         </div>
 
         <div className="form-group">
-          <label>Пригласить (поиск по никнейму)</label>
+          <label>Пригласить пользователей по никнейму</label>
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
             <input
               type="text"
@@ -107,9 +106,7 @@ export default function CreateRoom() {
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), searchUsers())}
               placeholder="Никнейм"
             />
-            <button type="button" className="btn btn-secondary" onClick={searchUsers}>
-              Искать
-            </button>
+            <button type="button" className="btn btn-secondary" onClick={searchUsers}>Найти</button>
           </div>
           {searchResults.length > 0 && (
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 0.5rem' }}>
@@ -132,7 +129,7 @@ export default function CreateRoom() {
               {invitedUsers.map((u) => (
                 <li key={u.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', marginRight: '0.5rem', marginBottom: '0.35rem' }}>
                   <span className="badge badge-joined">{u.nickname}</span>
-                  <button type="button" className="btn btn-ghost" style={{ padding: '0.2rem 0.4rem', fontSize: '0.8rem' }} onClick={() => removeInvite(u.id)}>×</button>
+                  <button type="button" className="btn btn-ghost" style={{ padding: '0.2rem 0.4rem', fontSize: '0.8rem' }} onClick={() => removeInvite(u.id)}>x</button>
                 </li>
               ))}
             </ul>
@@ -141,14 +138,9 @@ export default function CreateRoom() {
 
         <div style={{ marginBottom: '1rem' }}>
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Создание…' : 'Создать комнату'}
+            {loading ? 'Создание...' : 'Создать комнату'}
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ marginLeft: '0.5rem' }}
-            onClick={() => navigate('/rooms')}
-          >
+          <button type="button" className="btn btn-ghost" style={{ marginLeft: '0.5rem' }} onClick={() => navigate('/rooms')}>
             Отмена
           </button>
         </div>
