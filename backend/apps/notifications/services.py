@@ -62,27 +62,27 @@ def notify_room_invitation(room, invited_user) -> None:
         user=invited_user,
         actor=host,
         notification_type=InAppNotification.TYPE_ROOM_INVITE,
-        title='Room invitation',
-        message=f'{host.nickname} invited you to room {room.code}.',
+        title='Приглашение в комнату',
+        message=f'{host.nickname} приглашает вас в комнату {room.code}.',
         payload={'room_code': room.code, 'room_title': room.title},
     )
 
     tg_text = (
-        f'Invitation to CS2 room\n'
-        f'Host: {host.nickname}\n'
-        f'Room code: <b>{room.code}</b>\n'
-        f'Gather time: {schedule_text}\n'
-        f'Mark ready in Telegram: /ready {room.code}'
+        f'Приглашение в комнату CS2\n'
+        f'Хост: {host.nickname}\n'
+        f'Код комнаты: <b>{room.code}</b>\n'
+        f'Время сбора: {schedule_text}\n'
+        f'Отметиться готовым в Telegram: /ready {room.code}'
     )
     if invited_user.telegram_notifications_enabled and invited_user.telegram_chat_id:
         send_telegram_message(invited_user.telegram_chat_id, tg_text)
 
-    email_subject = 'CS2 room invitation'
+    email_subject = 'Приглашение в комнату CS2'
     email_message = (
-        f'{host.nickname} invited you to a CS2 room.\n'
-        f'Room code: {room.code}\n'
-        f'Gather time: {schedule_text}\n'
-        f'You can mark ready on the website or with /ready {room.code} in Telegram.'
+        f'{host.nickname} приглашает вас в комнату CS2.\n'
+        f'Код комнаты: {room.code}\n'
+        f'Время сбора: {schedule_text}\n'
+        f'Вы можете отметить готовность на сайте или командой /ready {room.code} в Telegram.'
     )
     try:
         send_email_message(recipient=invited_user.email, subject=email_subject, message=email_message)
@@ -93,10 +93,10 @@ def notify_room_invitation(room, invited_user) -> None:
 def notify_room_reminder(room, member) -> None:
     schedule_text = room.scheduled_for.strftime('%Y-%m-%d %H:%M UTC')
     tg_text = (
-        f'CS2 reminder: 5 minutes left\n'
-        f'Room code: <b>{room.code}</b>\n'
-        f'Gather time: {schedule_text}\n'
-        f'Mark ready: /ready {room.code}'
+        f'Напоминание CS2: осталось 5 минут\n'
+        f'Код комнаты: <b>{room.code}</b>\n'
+        f'Время сбора: {schedule_text}\n'
+        f'Отметить готовность: /ready {room.code}'
     )
 
     user = member.user
@@ -106,8 +106,8 @@ def notify_room_reminder(room, member) -> None:
     try:
         send_email_message(
             recipient=user.email,
-            subject='CS2 reminder: 5 minutes before match',
-            message=f'Room {room.code}. Gather time: {schedule_text}.',
+            subject='CS2: напоминание за 5 минут до матча',
+            message=f'Комната {room.code}. Время сбора: {schedule_text}.',
         )
     except Exception as exc:  # pragma: no cover - side effect only
         logger.warning('Failed to send room reminder email to %s: %s', user.email, exc)

@@ -177,12 +177,12 @@ class ProfileSerializer(serializers.ModelSerializer):
         if 'steamcommunity.com/profiles/' in url.lower():
             steam_id = steam_id_from_profile_url(url)
             if not steam_id:
-                raise serializers.ValidationError('Use URL in format https://steamcommunity.com/profiles/STEAM_ID64.')
+                raise serializers.ValidationError('Используйте ссылку формата https://steamcommunity.com/profiles/STEAM_ID64.')
         elif STEAM_ID_RE.search(url):
             # Vanity URL is allowed. SteamID64 will be resolved during CS2 sync.
             pass
         else:
-            raise serializers.ValidationError('Invalid Steam profile URL.')
+            raise serializers.ValidationError('Некорректная ссылка на Steam-профиль.')
         return url
 
     def update(self, instance, validated_data):

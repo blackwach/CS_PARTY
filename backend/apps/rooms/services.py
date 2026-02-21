@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def _validate_invite_permissions(host: User, invited_user: User) -> None:
     if invited_user.allowed_inviters.exists() and not invited_user.allowed_inviters.filter(id=host.id).exists():
-        raise ValidationError(f'User {invited_user.nickname} has not allowed your invites.')
+        raise ValidationError(f'Пользователь {invited_user.nickname} не разрешил вам отправлять приглашения.')
 
 
 @transaction.atomic
@@ -39,10 +39,10 @@ def create_room_with_invites(
     invited_ids = set(invited_user_ids)
     invited_users = list(User.objects.filter(id__in=invited_ids, is_active=True).exclude(id=host.id))
     if len(invited_users) != len(invited_ids):
-        raise ValidationError('One or more invited users were not found.')
+        raise ValidationError('Один или несколько приглашенных пользователей не найдены.')
 
     if len(invited_users) + 1 > 5:
-        raise ValidationError('A room can contain up to 5 players.')
+        raise ValidationError('В комнате может быть не более 5 игроков.')
 
     for invited in invited_users:
         _validate_invite_permissions(host, invited)
@@ -89,11 +89,11 @@ def create_room_with_invites(
 @transaction.atomic
 def join_room(room: GameRoom, user: User, via: str = RoomMembership.VIA_WEB) -> RoomMembership:
     if room.status in {GameRoom.STATUS_CANCELLED, GameRoom.STATUS_FINISHED}:
-        raise ValidationError('This room is closed.')
+        raise ValidationError('Эта комната закрыта.')
 
     membership = RoomMembership.objects.filter(room=room, user=user).first()
     if membership is None:
-        raise ValidationError('You were not invited to this room.')
+        raise ValidationError('Вы не приглашены в эту комнату.')
 
     if membership.state == RoomMembership.STATE_DECLINED:
         membership.state = RoomMembership.STATE_JOINED
@@ -126,14 +126,14 @@ def set_member_ready(
     host_public_ip: str = '',
 ) -> RoomMembership:
     if room.status in {GameRoom.STATUS_CANCELLED, GameRoom.STATUS_FINISHED}:
-        raise ValidationError('This room is closed.')
+        raise ValidationError('Эта комната закрыта.')
 
     membership = RoomMembership.objects.filter(room=room, user=user).first()
     if not membership:
-        raise ValidationError('You are not in this room.')
+        raise ValidationError('Вы не состоите в этой комнате.')
 
     if membership.state == RoomMembership.STATE_DECLINED:
-        raise ValidationError('You have declined this room invite.')
+        raise ValidationError('Вы отклонили приглашение в эту комнату.')
 
     membership.state = RoomMembership.STATE_READY
     membership.joined_via = via
@@ -155,11 +155,11 @@ def set_member_ready(
 def set_member_unready(room: GameRoom, user: User, via: str = RoomMembership.VIA_WEB) -> RoomMembership:
     membership = RoomMembership.objects.filter(room=room, user=user).first()
     if not membership:
-        raise ValidationError('You are not in this room.')
+        raise ValidationError('Вы не состоите в этой комнате.')
     if membership.state != RoomMembership.STATE_READY:
-        raise ValidationError('You are not marked as ready.')
+        raise ValidationError('У вас не включена готовность.')
     if room.status == GameRoom.STATUS_STARTED:
-        raise ValidationError('Match launch has already started. Ready status cannot be reverted.')
+        raise ValidationError('Запуск матча уже начался. Готовность отменить нельзя.')
 
     membership.state = RoomMembership.STATE_JOINED
     membership.joined_via = via
@@ -172,7 +172,7 @@ def set_member_unready(room: GameRoom, user: User, via: str = RoomMembership.VIA
 @transaction.atomic
 def close_room(room: GameRoom, user: User) -> GameRoom:
     if room.host_id != user.id:
-        raise ValidationError('Only room host can close the room.')
+        raise ValidationError('Только хост может закрыть комнату.')
 
     if room.status == GameRoom.STATUS_CANCELLED:
         return room
@@ -190,9 +190,9 @@ def _configure_host_auto_room_server(room: GameRoom) -> None:
     room_map = str((room.server_provider_payload or {}).get('map') or 'de_dust2').strip() or 'de_dust2'
 
     if not host:
-        raise ValidationError('Host public IP is not set. Host must press Ready from web client.')
+        raise ValidationError('Публичный IP хоста не задан. Хост должен нажать "Готов" в веб-клиенте.')
     if port <= 0:
-        raise ValidationError('Host server port is not configured.')
+        raise ValidationError('Порт сервера хоста не настроен.')
 
     connect_command = build_connect_command(host, port, password)
     connect_url = build_steam_launch_url(connect_command)
@@ -244,7 +244,7 @@ def _sync_room_status(room: GameRoom) -> None:
             room.save(update_fields=['server_error', 'updated_at'])
         except Exception as exc:  # pragma: no cover - defensive fallback
             logger.exception('Unexpected CS2 server provisioning error for room %s: %s', room.code, exc)
-            room.server_error = 'Unexpected server provisioning error.'
+            room.server_error = 'Непредвиденная ошибка при подготовке сервера.'
             room.save(update_fields=['server_error', 'updated_at'])
         return
 
@@ -256,22 +256,22 @@ def _sync_room_status(room: GameRoom) -> None:
 def mark_member_ready_by_telegram(chat_id: int, room_code: str) -> tuple[bool, str]:
     user = User.objects.filter(telegram_chat_id=chat_id).first()
     if not user:
-        return False, 'Link your Telegram account first with /link CODE.'
+        return False, 'Сначала привяжите Telegram-аккаунт через /link CODE.'
 
     room = GameRoom.objects.filter(code=room_code.upper()).first()
     if not room:
-        return False, 'Room not found.'
+        return False, 'Комната не найдена.'
 
     membership = RoomMembership.objects.filter(room=room, user=user).first()
     if not membership:
-        return False, 'You are not invited to this room.'
+        return False, 'Вы не приглашены в эту комнату.'
 
     try:
         set_member_ready(room, user, via=RoomMembership.VIA_TELEGRAM)
     except ValidationError as exc:
         return False, str(exc.detail[0] if isinstance(exc.detail, list) else exc.detail)
 
-    return True, f'Ready status updated for room {room.code}.'
+    return True, f'Статус готовности обновлен для комнаты {room.code}.'
 
 
 def send_five_minute_reminders() -> int:

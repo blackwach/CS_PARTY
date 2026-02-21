@@ -4,11 +4,16 @@ import { useAuth } from '../context/AuthContext'
 import FriendsPanel from './FriendsPanel'
 import NotificationBell from './NotificationBell'
 
+function defaultFriendsPanelState() {
+  if (typeof window === 'undefined') return true
+  return window.innerWidth > 1100
+}
+
 export default function Layout() {
   const { logout, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const [friendsOpen, setFriendsOpen] = useState(true)
+  const [friendsOpen, setFriendsOpen] = useState(defaultFriendsPanelState)
 
   const pageVariant = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password') || pathname.startsWith('/reset-password') || pathname.startsWith('/verify-email')
     ? 'auth'

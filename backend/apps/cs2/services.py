@@ -94,7 +94,7 @@ def _sync_from_public_profile(steam_id: str) -> dict:
             'total_matches': 0,
             'matches': [],
             'source': 'public_profile',
-            'note': f'Limited mode: failed to fetch public Steam profile ({exc}).',
+            'note': f'Ограниченный режим: не удалось загрузить публичный Steam-профиль ({exc}).',
             'profile_name': '',
         }
 
@@ -108,7 +108,7 @@ def _sync_from_public_profile(steam_id: str) -> dict:
             'total_matches': 0,
             'matches': [],
             'source': 'public_profile',
-            'note': f'Limited mode: failed to parse public Steam profile ({exc}).',
+            'note': f'Ограниченный режим: не удалось разобрать ответ Steam-профиля ({exc}).',
             'profile_name': '',
         }
 
@@ -121,7 +121,7 @@ def _sync_from_public_profile(steam_id: str) -> dict:
             'total_matches': 0,
             'matches': [],
             'source': 'public_profile',
-            'note': 'Limited mode: Steam profile is private. Make profile public to sync without Steam auth.',
+            'note': 'Ограниченный режим: профиль Steam закрыт. Откройте профиль для синхронизации без авторизации в Steam.',
             'profile_name': '',
         }
 
@@ -134,8 +134,8 @@ def _sync_from_public_profile(steam_id: str) -> dict:
         'matches': [],
         'source': 'public_profile',
         'note': (
-            'Limited mode: synced from public Steam profile only. '
-            'CS2 rank and match history are unavailable without Steam GC/API provider.'
+            'Ограниченный режим: данные получены только из публичного Steam-профиля. '
+            'Ранг и история матчей CS2 недоступны без Steam GC/API-провайдера.'
         ),
         'profile_name': display_name,
     }
@@ -151,7 +151,7 @@ def sync_cs2_stats_for_user(user):
             'total_matches': 0,
             'matches': [],
             'source': 'public_profile',
-            'note': 'Limited mode: set Steam profile URL in profile to enable sync.',
+            'note': 'Ограниченный режим: укажите ссылку на Steam-профиль в настройках профиля.',
             'profile_name': '',
         }
         stats, _ = PlayerStats.objects.get_or_create(user=user)
@@ -178,8 +178,8 @@ def sync_cs2_stats_for_user(user):
             data = _sync_from_public_profile(steam_id)
             data['source'] = data.get('source') or 'public_profile'
             data['note'] = (
-                f'Provider unavailable ({exc}). '
-                f"{data.get('note') or 'Limited mode: synced from public Steam profile only.'}"
+                f'Провайдер статистики недоступен ({exc}). '
+                f"{data.get('note') or 'Ограниченный режим: данные получены только из публичного Steam-профиля.'}"
             )
         else:
             try:
@@ -188,8 +188,8 @@ def sync_cs2_stats_for_user(user):
                 data = _sync_from_public_profile(steam_id)
                 data['source'] = data.get('source') or 'public_profile'
                 data['note'] = (
-                    f'Provider returned invalid JSON ({exc}). '
-                    f"{data.get('note') or 'Limited mode: synced from public Steam profile only.'}"
+                    f'Провайдер вернул некорректный JSON ({exc}). '
+                    f"{data.get('note') or 'Ограниченный режим: данные получены только из публичного Steam-профиля.'}"
                 )
 
     else:

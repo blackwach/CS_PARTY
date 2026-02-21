@@ -5,7 +5,7 @@ import { rooms as roomsApi } from '../api'
 const statusLabels = {
   open: 'Открыта',
   ready: 'Готова',
-  started: '-дёт',
+  started: 'Идёт',
   finished: 'Завершена',
   cancelled: 'Отменена',
 }

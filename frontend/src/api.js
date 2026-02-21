@@ -91,5 +91,5 @@ export const rooms = {
 
 export const cs2 = {
   getStats: () => api.get('/api/cs2/me/stats/'),
-  sync: () => api.post('/api/cs2/me/sync/'),
+  sync: () => api.post('/api/cs2/me/sync/', {}),
 }

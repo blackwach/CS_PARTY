@@ -4,6 +4,12 @@ import { useAuth } from '../context/AuthContext'
 import { cs2 as cs2Api } from '../api'
 
 const STEAM_PROFILE_BASE = 'https://steamcommunity.com/profiles/'
+const RESULT_LABELS = {
+  win: 'Победа',
+  lose: 'Поражение',
+  loss: 'Поражение',
+  draw: 'Ничья',
+}
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleString('ru-RU') : '-'
@@ -36,7 +42,7 @@ export default function CS2Stats() {
           setStats(null)
           return
         }
-        setError(extractApiError(err, 'Failed to load CS2 stats.'))
+        setError(extractApiError(err, 'Не удалось загрузить статистику CS2.'))
       })
       .finally(() => setLoading(false))
   }
@@ -51,7 +57,7 @@ export default function CS2Stats() {
     cs2Api
       .sync()
       .then((res) => setStats(res.data))
-      .catch((err) => setError(extractApiError(err, 'CS2 stats sync failed.')))
+      .catch((err) => setError(extractApiError(err, 'Синхронизация статистики CS2 не удалась.')))
       .finally(() => setSyncing(false))
   }
 
@@ -65,92 +71,87 @@ export default function CS2Stats() {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>
-          CS2 Stats
-        </h1>
+      <div className="cs2-stats-head">
+        <h1 className="page-title">Статистика CS2</h1>
         <button type="button" className="btn btn-primary" onClick={sync} disabled={syncing}>
-          {syncing ? 'Syncing...' : 'Sync'}
+          {syncing ? 'Синхронизация...' : 'Синхронизировать'}
         </button>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
       {stats?.note && <div className="alert alert-warning">{stats.note}</div>}
 
-      <div className="panel" style={{ marginBottom: '1rem' }}>
-        <h2 style={{ marginTop: 0 }}>Player</h2>
-        <p style={{ margin: '0 0 0.5rem', fontWeight: 600 }}>{user?.nickname || '-'}</p>
+      <div className="panel cs2-player-card">
+        <h2>Профиль игрока</h2>
+        <p className="cs2-player-name">{user?.nickname || '-'}</p>
         {steamProfileUrl ? (
-          <p style={{ margin: 0, fontSize: '0.9rem' }}>
+          <p className="cs2-profile-link">
             <a href={steamProfileUrl} target="_blank" rel="noopener noreferrer">
-              Steam profile
+              Открыть Steam-профиль
             </a>
-            <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
-              (you can edit it in <Link to="/profile">profile</Link>)
+            <span>
+              (изменить можно в <Link to="/profile">профиле</Link>)
             </span>
           </p>
         ) : (
-          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            Set Steam profile URL in <Link to="/profile">profile</Link>, then click Sync.
+          <p className="cs2-profile-link">
+            Укажите ссылку на Steam-профиль в <Link to="/profile">профиле</Link>, затем нажмите «Синхронизировать».
           </p>
         )}
       </div>
 
       {!stats ? (
         <div className="panel">
-          <p style={{ color: 'var(--text-muted)' }}>
-            {steamProfileUrl ? 'Click Sync to fetch rank and recent matches.' : 'Add Steam profile URL and run sync.'}
+          <p className="cs2-empty-hint">
+            {steamProfileUrl
+              ? 'Нажмите «Синхронизировать», чтобы обновить доступные данные.'
+              : 'Добавьте Steam-профиль и выполните первую синхронизацию.'}
           </p>
         </div>
       ) : (
         <>
           <div className="panel">
-            <h2>Overview</h2>
+            <h2>Обзор</h2>
             <div className="stat-grid">
               <div className="stat-box">
                 <div className="stat-value">{stats.rank || '-'}</div>
-                <div className="stat-label">Rank</div>
+                <div className="stat-label">Ранг</div>
               </div>
               <div className="stat-box">
                 <div className="stat-value">{stats.wins ?? '-'}</div>
-                <div className="stat-label">Wins</div>
+                <div className="stat-label">Побед</div>
               </div>
               <div className="stat-box">
                 <div className="stat-value">{stats.losses ?? '-'}</div>
-                <div className="stat-label">Losses</div>
+                <div className="stat-label">Поражений</div>
               </div>
               <div className="stat-box">
                 <div className="stat-value">{stats.total_matches ?? '-'}</div>
-                <div className="stat-label">Matches</div>
+                <div className="stat-label">Матчей</div>
               </div>
             </div>
-            <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Updated: {formatDate(stats.last_synced_at)}</p>
+            <p className="cs2-updated-at">Обновлено: {formatDate(stats.last_synced_at)}</p>
           </div>
 
           {stats.recent_matches?.length > 0 && (
             <div className="panel">
-              <h2>Recent matches</h2>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <h2>Последние матчи</h2>
+              <ul className="cs2-matches-list">
                 {stats.recent_matches.map((item, index) => (
-                  <li
-                    key={item.external_match_id || index}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '0.5rem 0',
-                      borderBottom: '1px solid var(--border)',
-                      flexWrap: 'wrap',
-                      gap: '0.5rem',
-                    }}
-                  >
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>
+                  <li key={item.external_match_id || index} className="cs2-match-row">
+                    <span className="cs2-match-meta">
                       {item.map_name || '-'} | {formatDate(item.played_at)}
                     </span>
-                    <span>
+                    <span className="cs2-match-stats">
                       K/D/A: {item.kills ?? 0}/{item.deaths ?? 0}/{item.assists ?? 0}
                       {item.result != null && (
-                        <span className={item.result === 'win' ? 'badge badge-joined' : 'badge badge-declined'} style={{ marginLeft: '0.5rem' }}>
-                          {item.result === 'win' ? 'Win' : 'Loss'}
+                        <span className={`badge ${
+                          item.result === 'win'
+                            ? 'badge-joined'
+                            : item.result === 'draw'
+                              ? 'badge-invited'
+                              : 'badge-declined'
+                        }`}>
+                          {RESULT_LABELS[item.result] || 'Матч'}
                         </span>
                       )}
                     </span>

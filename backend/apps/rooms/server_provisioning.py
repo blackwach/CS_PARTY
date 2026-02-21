@@ -33,7 +33,7 @@ def configure_room_server_endpoint(
     host = (host or '').strip()
     password = (password or '').strip()
     if not host or int(port or 0) <= 0:
-        raise ValidationError('Server host and port are required.')
+        raise ValidationError('Нужно указать хост и порт сервера.')
 
     command = launch_command.strip() if launch_command else build_connect_command(host, port, password)
     url = connect_url.strip() if connect_url else build_steam_launch_url(command)
@@ -64,7 +64,7 @@ def configure_room_server_endpoint(
 
 def ensure_server_connect_metadata(room: GameRoom) -> GameRoom:
     if not room.server_host or not room.server_port:
-        raise ValidationError('Room server endpoint is not configured.')
+        raise ValidationError('Адрес сервера комнаты не настроен.')
     return configure_room_server_endpoint(
         room,
         host=room.server_host,
@@ -96,7 +96,7 @@ def _provision_with_external_api(room: GameRoom) -> dict | None:
         response = requests.post(f'{base_url}/servers', json=payload, headers=headers, timeout=20)
         response.raise_for_status()
     except requests.RequestException as exc:
-        raise ValidationError(f'Failed to provision CS2 server: {exc}') from exc
+        raise ValidationError(f'Не удалось подготовить CS2-сервер: {exc}') from exc
 
     data = response.json() if response.content else {}
     host = str(data.get('host') or data.get('ip') or '').strip()
@@ -105,7 +105,7 @@ def _provision_with_external_api(room: GameRoom) -> dict | None:
     connect_url = str(data.get('steam_connect_url') or '').strip()
 
     if not host or port <= 0:
-        raise ValidationError('CS2 server provider response must contain host and port.')
+        raise ValidationError('Ответ провайдера CS2-сервера должен содержать host и port.')
 
     provider_payload = {'source': 'allocator'}
     provider_payload.update(data if isinstance(data, dict) else {})
@@ -142,7 +142,7 @@ def provision_server_for_room(room: GameRoom) -> GameRoom:
 
     provisioning_data = _provision_with_external_api(room) or _provision_from_static_settings()
     if not provisioning_data:
-        raise ValidationError('CS2 server is not configured. Set CS2_SERVER_* or CS2_SERVER_API_URL.')
+        raise ValidationError('CS2-сервер не настроен. Укажите CS2_SERVER_* или CS2_SERVER_API_URL.')
 
     return configure_room_server_endpoint(
         room,

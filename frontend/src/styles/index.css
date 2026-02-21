@@ -500,6 +500,43 @@ input, button, select, textarea {
   margin: 0;
   font-size: 1rem;
 }
+.friends-search-box {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.friends-search-bar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem;
+}
+.friends-search-results {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.friends-search-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+.friends-search-item .btn {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.82rem;
+}
+.friends-search-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
 .friends-list {
   list-style: none;
   margin: 0;
@@ -699,6 +736,172 @@ input, button, select, textarea {
   gap: 0.5rem;
 }
 
+.room-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.room-create-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 1rem;
+}
+.room-host-settings {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 0.8rem;
+}
+.room-host-toggle {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+.room-host-toggle input {
+  margin-top: 0.2rem;
+}
+.room-host-fields {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.7rem;
+}
+.room-host-fields .form-group {
+  margin-bottom: 0;
+}
+.room-invites-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 0.8rem;
+}
+.room-invites-box h2 {
+  margin: 0 0 0.7rem;
+  font-size: 1rem;
+}
+.room-search-bar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+.room-search-results {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.room-search-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  padding: 0.45rem 0.55rem;
+}
+.room-search-user {
+  font-weight: 600;
+}
+.room-search-result-item .btn {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+}
+.room-invited-list {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.room-invited-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  padding: 0.2rem 0.35rem;
+}
+.room-invited-item .btn {
+  padding: 0.1rem 0.3rem;
+  min-width: 1.4rem;
+}
+.room-create-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cs2-stats-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.cs2-stats-head .page-title {
+  margin: 0;
+}
+.cs2-player-card {
+  margin-bottom: 1rem;
+}
+.cs2-player-card h2 {
+  margin-top: 0;
+}
+.cs2-player-name {
+  margin: 0 0 0.45rem;
+  font-weight: 600;
+}
+.cs2-profile-link {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.cs2-profile-link span {
+  color: var(--text-muted);
+  margin-left: 0.4rem;
+}
+.cs2-empty-hint {
+  margin: 0;
+  color: var(--text-muted);
+}
+.cs2-updated-at {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.cs2-matches-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cs2-match-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.cs2-match-meta {
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+}
+.cs2-match-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 1100px) {
   .app-layout.has-friends .main {
     width: min(960px, calc(100% - 2rem));
@@ -709,13 +912,84 @@ input, button, select, textarea {
   }
 }
 
+@media (max-width: 980px) {
+  .room-create-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 700px) {
+  .main {
+    width: calc(100% - 1rem);
+    padding: 1rem 0.5rem 1.25rem;
+  }
   .app-header {
     flex-direction: column;
     align-items: stretch;
+    padding: 0.65rem 0.8rem;
   }
   .app-nav {
     flex-wrap: wrap;
+  }
+  .page-title {
+    font-size: 1.45rem;
+  }
+  .panel {
+    padding: 1rem;
+  }
+  .card {
+    padding: 0.85rem 1rem;
+  }
+  .notification-popover {
+    width: min(26rem, 96vw);
+    right: 0;
+  }
+  .friends-panel {
+    top: 0;
+    right: 0;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+  }
+  .friends-search-bar {
+    grid-template-columns: 1fr;
+  }
+  .friends-search-item {
+    flex-direction: column;
+  }
+  .friends-search-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+  .friends-search-actions .btn {
+    width: 100%;
+  }
+  .room-search-bar {
+    grid-template-columns: 1fr;
+  }
+  .room-search-result-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .room-search-result-item .btn {
+    width: 100%;
+  }
+  .room-create-actions .btn {
+    width: 100%;
+  }
+  .cs2-stats-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cs2-stats-head .btn {
+    width: 100%;
+  }
+  .cs2-match-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
   .profile-avatar-row {
     grid-template-columns: 1fr;

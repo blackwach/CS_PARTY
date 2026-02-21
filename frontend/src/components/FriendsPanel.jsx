@@ -14,6 +14,7 @@ export default function FriendsPanel({ isVisible, onClose }) {
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
+  const [hasSearched, setHasSearched] = useState(false)
   const [requestState, setRequestState] = useState({})
   const navigate = useNavigate()
 
@@ -32,8 +33,10 @@ export default function FriendsPanel({ isVisible, onClose }) {
 
   const searchUsers = async () => {
     const query = search.trim()
+    setHasSearched(true)
     if (!query) {
       setSearchResults([])
+      setSearchError('')
       return
     }
 
@@ -69,8 +72,8 @@ export default function FriendsPanel({ isVisible, onClose }) {
         <button type="button" className="btn btn-ghost" onClick={onClose}>Закрыть</button>
       </div>
 
-      <div style={{ marginBottom: '0.75rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+      <div className="friends-search-box">
+        <div className="friends-search-bar">
           <input
             type="text"
             value={search}
@@ -79,38 +82,42 @@ export default function FriendsPanel({ isVisible, onClose }) {
             placeholder="Найти по нику"
           />
           <button type="button" className="btn btn-secondary" onClick={searchUsers} disabled={searching}>
-            {searching ? '...' : 'Найти'}
+            {searching ? 'Поиск...' : 'Найти'}
           </button>
         </div>
-        {searchError && <p style={{ color: 'var(--danger)', margin: '0.35rem 0 0' }}>{searchError}</p>}
+        {searchError && <p className="form-error">{searchError}</p>}
         {searchResults.length > 0 && (
-          <ul style={{ listStyle: 'none', padding: 0, margin: '0.5rem 0 0' }}>
+          <ul className="friends-search-results">
             {searchResults.map((user) => (
-              <li key={user.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: '0.2rem 0.4rem' }}
-                  onClick={() => navigate(`/users/${user.id}`)}
-                >
+              <li key={user.id} className="friends-search-item">
+                <button type="button" className="btn btn-ghost" onClick={() => navigate(`/users/${user.id}`)}>
                   {user.nickname}
                 </button>
-                {requestState[user.id] === 'sent' ? (
-                  <span className="badge badge-invited">Отправлено</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ padding: '0.2rem 0.45rem' }}
-                    disabled={requestState[user.id] === 'loading'}
-                    onClick={() => sendFriendRequest(user.id)}
-                  >
-                    +
-                  </button>
-                )}
+                <div className="friends-search-actions">
+                  {requestState[user.id] === 'sent' ? (
+                    <span className="badge badge-invited">Отправлено</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={requestState[user.id] === 'loading'}
+                      onClick={() => sendFriendRequest(user.id)}
+                    >
+                      {requestState[user.id] === 'loading' ? '...' : 'Добавить'}
+                    </button>
+                  )}
+                  {requestState[user.id] && !['loading', 'sent'].includes(requestState[user.id]) && (
+                    <small className="form-error">
+                      {requestState[user.id] === 'error' ? 'Ошибка отправки' : requestState[user.id]}
+                    </small>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
+        )}
+        {hasSearched && !searching && !searchError && search.trim() && searchResults.length === 0 && (
+          <p className="form-hint">Никого не найдено.</p>
         )}
       </div>
 
