@@ -3,7 +3,7 @@ from datetime import date
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import Friendship, User
+from apps.accounts.models import DirectMessage, Friendship, User
 from apps.notifications.models import InAppNotification
 
 
@@ -59,6 +59,8 @@ class SocialApiTests(APITestCase):
         list_messages = self.client.get(f'/api/auth/chats/{self.bob.id}/messages/')
         self.assertEqual(list_messages.status_code, status.HTTP_200_OK)
         self.assertEqual(len(list_messages.data), 1)
+        self.assertIsNotNone(list_messages.data[0]['read_at'])
+        self.assertIsNotNone(DirectMessage.objects.get(id=send_message.data['id']).read_at)
 
     def test_public_profile_contains_friendship_status(self):
         self.client.force_authenticate(user=self.alice)
@@ -70,3 +72,5 @@ class SocialApiTests(APITestCase):
         self.assertNotIn('initials', response.data)
         self.assertIn('nickname', response.data)
         self.assertIn('steam_profile_url', response.data)
+        self.assertIn('is_online', response.data)
+        self.assertIn('last_seen_at', response.data)

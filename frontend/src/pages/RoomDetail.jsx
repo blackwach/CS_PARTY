@@ -4,18 +4,18 @@ import { useAuth } from '../context/AuthContext'
 import { rooms as roomsApi } from '../api'
 
 const statusLabels = {
-  open: 'Open',
-  ready: 'All ready',
-  started: 'Server started',
-  finished: 'Finished',
-  cancelled: 'Closed',
+  open: 'Открыта',
+  ready: 'Все готовы',
+  started: 'Сервер запущен',
+  finished: 'Завершена',
+  cancelled: 'Закрыта',
 }
 
 const stateLabels = {
-  invited: 'Invited',
-  joined: 'Joined',
-  ready: 'Ready',
-  declined: 'Declined',
+  invited: 'Приглашен',
+  joined: 'В комнате',
+  ready: 'Готов',
+  declined: 'Отклонил',
 }
 
 function formatDate(value) {
@@ -58,7 +58,7 @@ export default function RoomDetail() {
         if (!silent) setError('')
       })
       .catch((err) => {
-        if (!silent) setError(err.response?.data?.detail || 'Room not found.')
+        if (!silent) setError(err.response?.data?.detail || 'Комната не найдена.')
       })
       .finally(() => {
         if (!silent) setLoading(false)
@@ -98,7 +98,7 @@ export default function RoomDetail() {
     setError('')
     roomsApi[action](code, payload)
       .then((res) => setRoom(res.data))
-      .catch((err) => setError(err.response?.data?.detail || 'Action failed.'))
+      .catch((err) => setError(err.response?.data?.detail || 'Не удалось выполнить действие.'))
       .finally(() => setActionLoading(false))
   }
 
@@ -107,13 +107,13 @@ export default function RoomDetail() {
       try {
         const hostPublicIp = await detectPublicIp()
         if (!hostPublicIp) {
-          setError('Could not detect host public IP.')
+          setError('Не удалось определить публичный IP хоста.')
           return
         }
         doAction('ready', { host_public_ip: hostPublicIp })
         return
       } catch {
-        setError('Could not detect host public IP. Check internet access and try again.')
+        setError('Не удалось определить публичный IP хоста. Проверьте интернет и попробуйте снова.')
         return
       }
     }
@@ -133,7 +133,7 @@ export default function RoomDetail() {
       <div className="panel">
         <div className="alert alert-error">{error}</div>
         <button type="button" className="btn btn-secondary" onClick={() => navigate('/rooms')}>
-          Back to rooms
+          Назад к комнатам
         </button>
       </div>
     )
@@ -143,11 +143,11 @@ export default function RoomDetail() {
     <>
       <div style={{ marginBottom: '1rem' }}>
         <button type="button" className="btn btn-ghost" onClick={() => navigate('/rooms')} style={{ marginBottom: '0.5rem' }}>
-          Back
+          Назад
         </button>
         <h1 className="page-title">{room?.title}</h1>
         <p className="card-meta">
-          Code: {room?.code} | {formatDate(room?.scheduled_for)}
+          Код: {room?.code} | {formatDate(room?.scheduled_for)}
         </p>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
@@ -158,14 +158,14 @@ export default function RoomDetail() {
             {statusLabels[room?.status] || room?.status}
           </span>
           <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            Host: {room?.host?.nickname}
+            Хост: {room?.host?.nickname}
           </span>
         </div>
 
         {isHost && room?.status !== 'cancelled' && room?.status !== 'finished' && (
           <div style={{ marginBottom: '1rem' }}>
             <button type="button" className="btn btn-danger" onClick={() => doAction('close')} disabled={actionLoading}>
-              Close room
+              Закрыть комнату
             </button>
           </div>
         )}
@@ -173,10 +173,10 @@ export default function RoomDetail() {
         {myState === 'invited' && (
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
             <button type="button" className="btn btn-primary" onClick={() => doAction('join')} disabled={actionLoading}>
-              Join room
+              Войти в комнату
             </button>
             <button type="button" className="btn btn-danger" onClick={() => doAction('decline')} disabled={actionLoading}>
-              Decline
+              Отклонить
             </button>
           </div>
         )}
@@ -184,7 +184,7 @@ export default function RoomDetail() {
         {myState === 'joined' && room?.status !== 'cancelled' && (
           <div style={{ marginBottom: '1rem' }}>
             <button type="button" className="btn btn-primary" onClick={handleReady} disabled={actionLoading}>
-              Ready
+              Готов
             </button>
           </div>
         )}
@@ -193,12 +193,12 @@ export default function RoomDetail() {
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
             {room?.status !== 'started' && (
               <button type="button" className="btn btn-secondary" onClick={() => doAction('unready')} disabled={actionLoading}>
-                Cancel ready
+                Отменить готовность
               </button>
             )}
             {launchUrl && (
               <button type="button" className="btn btn-primary" onClick={() => window.location.assign(launchUrl)}>
-                Launch CS2
+                Запустить CS2
               </button>
             )}
           </div>
@@ -212,11 +212,11 @@ export default function RoomDetail() {
 
         {room?.server_host && room?.server_port && (
           <p style={{ margin: '0 0 1rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            Server: {room.server_host}:{room.server_port}
+            Сервер: {room.server_host}:{room.server_port}
           </p>
         )}
 
-        <h3 style={{ margin: '1rem 0 0.5rem', fontSize: '1rem' }}>Players</h3>
+        <h3 style={{ margin: '1rem 0 0.5rem', fontSize: '1rem' }}>Игроки</h3>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {(room?.memberships || []).map((membership) => (
             <li
@@ -233,7 +233,7 @@ export default function RoomDetail() {
                 <Link to={`/users/${membership.user?.id}`}>{membership.user?.nickname || '-'}</Link>
                 {membership.user?.id !== currentUser?.id && (
                   <Link to={`/chat/${membership.user?.id}`} className="btn btn-ghost" style={{ padding: '0.15rem 0.4rem' }}>
-                    Chat
+                    Чат
                   </Link>
                 )}
               </div>

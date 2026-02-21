@@ -64,6 +64,13 @@ class Cs2StatsFlowTests(APITestCase):
         self.assertEqual(stats_response.data['total_matches'], 17)
         self.assertEqual(len(stats_response.data['recent_matches']), 1)
 
+    @override_settings(CS2_STATS_API_URL='')
+    def test_sync_without_steam_profile_returns_limited_mode(self):
+        sync_response = self.client.post('/api/cs2/me/sync/', {}, format='json')
+        self.assertEqual(sync_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(sync_response.data['source'], 'public_profile')
+        self.assertTrue(sync_response.data['note'])
+
     @override_settings(CS2_STATS_API_URL='https://cs2-stats.example')
     @patch('apps.cs2.services.requests.get')
     def test_sync_resolves_vanity_steam_url(self, mock_get):

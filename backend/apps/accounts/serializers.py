@@ -40,9 +40,12 @@ def generate_username(seed: str) -> str:
 
 
 class BasicUserSerializer(serializers.ModelSerializer):
+    is_online = serializers.BooleanField(read_only=True)
+    last_seen_at = serializers.DateTimeField(read_only=True)
+
     class Meta:
         model = User
-        fields = ('id', 'nickname', 'avatar')
+        fields = ('id', 'nickname', 'avatar', 'is_online', 'last_seen_at')
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -118,6 +121,8 @@ class ProfileSerializer(serializers.ModelSerializer):
     avatar = serializers.ImageField(required=False, allow_null=True)
     pending_email = serializers.EmailField(read_only=True)
     pending_email_expires_at = serializers.DateTimeField(read_only=True)
+    is_online = serializers.BooleanField(read_only=True)
+    last_seen_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = User
@@ -138,6 +143,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             'telegram_username',
             'telegram_notifications_enabled',
             'is_email_verified',
+            'is_online',
+            'last_seen_at',
         )
         read_only_fields = (
             'id',
@@ -147,6 +154,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             'is_email_verified',
             'pending_email',
             'pending_email_expires_at',
+            'is_online',
+            'last_seen_at',
         )
 
     def validate_email(self, value: str):
@@ -203,13 +212,15 @@ class PublicProfileSerializer(serializers.ModelSerializer):
             'nickname',
             'avatar',
             'steam_profile_url',
+            'is_online',
+            'last_seen_at',
         )
 
 
 class PublicUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'nickname', 'avatar')
+        fields = ('id', 'nickname', 'avatar', 'is_online', 'last_seen_at')
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):

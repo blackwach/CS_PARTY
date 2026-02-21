@@ -1,8 +1,10 @@
 import os
+import logging
 
 from django.core.asgi import get_asgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+logger = logging.getLogger(__name__)
 
 django_asgi_app = get_asgi_application()
 application = django_asgi_app
@@ -24,6 +26,9 @@ try:
             ),
         }
     )
+except ModuleNotFoundError:
+    logger.warning('Channels dependencies are missing. Running in HTTP-only mode.')
+    application = django_asgi_app
 except Exception:
-    # Channels is optional in local environments where ws deps are not installed.
+    logger.exception('WebSocket router initialization failed. Running in HTTP-only mode.')
     application = django_asgi_app

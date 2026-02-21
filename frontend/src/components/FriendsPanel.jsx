@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { auth as authApi } from '../api'
 
+function formatLastSeen(value) {
+  if (!value) return ''
+  return `Был(а) ${new Date(value).toLocaleString()}`
+}
+
 export default function FriendsPanel({ isVisible, onClose }) {
   const [friends, setFriends] = useState([])
   const [loading, setLoading] = useState(true)
@@ -141,7 +146,11 @@ export default function FriendsPanel({ isVisible, onClose }) {
                 }}
                 title="Открыть чат"
               >
-                {item.friend.nickname}
+                <span className={`friend-status-dot ${item.friend.is_online ? 'is-online' : ''}`} />
+                <span>{item.friend.nickname}</span>
+                {!item.friend.is_online && item.friend.last_seen_at && (
+                  <small className="friend-last-seen">{formatLastSeen(item.friend.last_seen_at)}</small>
+                )}
               </button>
             </li>
           ))}

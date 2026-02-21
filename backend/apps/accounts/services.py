@@ -4,13 +4,13 @@ from typing import Iterable
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Case, F, IntegerField, Q, Value, When
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.notifications.models import InAppNotification
 from apps.notifications.services import create_notification
-from .realtime import broadcast_chat_message
+from .realtime import broadcast_chat_message, broadcast_chat_read
 from .models import (
     DirectConversation,
     DirectMessage,
@@ -341,6 +341,68 @@ def get_or_create_direct_conversation(user_a: User, user_b: User) -> DirectConve
     low_id, high_id = _pair_ids(user_a.id, user_b.id)
     conversation, _ = DirectConversation.objects.get_or_create(user_low_id=low_id, user_high_id=high_id)
     return conversation
+
+
+def get_user_presence(user_or_id: User | int) -> dict:
+    user_id = int(user_or_id.id if isinstance(user_or_id, User) else user_or_id)
+    snapshot = User.objects.filter(id=user_id, is_active=True).values('id', 'ws_connection_count', 'last_seen_at').first()
+    if not snapshot:
+        return {'user_id': user_id, 'is_online': False, 'last_seen_at': None}
+    last_seen_at = snapshot['last_seen_at']
+    return {
+        'user_id': user_id,
+        'is_online': int(snapshot['ws_connection_count'] or 0) > 0,
+        'last_seen_at': last_seen_at.isoformat() if last_seen_at else None,
+    }
+
+
+def mark_user_connected(user_or_id: User | int) -> dict:
+    user_id = int(user_or_id.id if isinstance(user_or_id, User) else user_or_id)
+    now = timezone.now()
+    User.objects.filter(id=user_id, is_active=True).update(
+        ws_connection_count=F('ws_connection_count') + 1,
+        last_seen_at=now,
+    )
+    return get_user_presence(user_id)
+
+
+def mark_user_disconnected(user_or_id: User | int) -> dict:
+    user_id = int(user_or_id.id if isinstance(user_or_id, User) else user_or_id)
+    now = timezone.now()
+    User.objects.filter(id=user_id, is_active=True).update(
+        ws_connection_count=Case(
+            When(ws_connection_count__gt=0, then=F('ws_connection_count') - 1),
+            default=Value(0),
+            output_field=IntegerField(),
+        ),
+        last_seen_at=now,
+    )
+    return get_user_presence(user_id)
+
+
+@transaction.atomic
+def mark_direct_messages_as_read(reader: User, peer: User) -> list[int]:
+    if reader.id == peer.id:
+        return []
+    conversation = get_or_create_direct_conversation(reader, peer)
+    unread_qs = DirectMessage.objects.filter(
+        conversation=conversation,
+        sender=peer,
+        read_at__isnull=True,
+    )
+    unread_ids = list(unread_qs.values_list('id', flat=True))
+    if not unread_ids:
+        return []
+
+    read_at = timezone.now()
+    unread_qs.update(read_at=read_at)
+    broadcast_chat_read(
+        conversation=conversation,
+        reader_id=reader.id,
+        message_ids=unread_ids,
+        read_at=read_at,
+    )
+    return unread_ids
 
 
 @transaction.atomic

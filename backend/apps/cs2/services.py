@@ -5,7 +5,6 @@ import xml.etree.ElementTree as ET
 import requests
 from django.conf import settings
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
 
 from .models import MatchHistory, PlayerStats
 
@@ -88,16 +87,43 @@ def _sync_from_public_profile(steam_id: str) -> dict:
         response = requests.get(xml_url, timeout=20)
         response.raise_for_status()
     except requests.RequestException as exc:
-        raise ValidationError(f'Failed to fetch public Steam profile: {exc}') from exc
+        return {
+            'rank': '',
+            'wins': 0,
+            'losses': 0,
+            'total_matches': 0,
+            'matches': [],
+            'source': 'public_profile',
+            'note': f'Limited mode: failed to fetch public Steam profile ({exc}).',
+            'profile_name': '',
+        }
 
     try:
         root = ET.fromstring(response.text or '')
     except ET.ParseError as exc:
-        raise ValidationError('Failed to parse public Steam profile response.') from exc
+        return {
+            'rank': '',
+            'wins': 0,
+            'losses': 0,
+            'total_matches': 0,
+            'matches': [],
+            'source': 'public_profile',
+            'note': f'Limited mode: failed to parse public Steam profile ({exc}).',
+            'profile_name': '',
+        }
 
     privacy_state = (root.findtext('privacyState') or '').strip().lower()
     if privacy_state and privacy_state != 'public':
-        raise ValidationError('Steam profile is private. Make profile public to sync without Steam auth.')
+        return {
+            'rank': '',
+            'wins': 0,
+            'losses': 0,
+            'total_matches': 0,
+            'matches': [],
+            'source': 'public_profile',
+            'note': 'Limited mode: Steam profile is private. Make profile public to sync without Steam auth.',
+            'profile_name': '',
+        }
 
     display_name = (root.findtext('steamID') or '').strip()
     return {
@@ -118,9 +144,26 @@ def _sync_from_public_profile(steam_id: str) -> dict:
 def sync_cs2_stats_for_user(user):
     steam_id = _get_or_resolve_steam_account_id(user)
     if not steam_id:
-        raise ValidationError(
-            'Specify Steam profile URL in your profile. Supported: /profiles/STEAM_ID64 and /id/vanity_name.'
-        )
+        data = {
+            'rank': '',
+            'wins': 0,
+            'losses': 0,
+            'total_matches': 0,
+            'matches': [],
+            'source': 'public_profile',
+            'note': 'Limited mode: set Steam profile URL in profile to enable sync.',
+            'profile_name': '',
+        }
+        stats, _ = PlayerStats.objects.get_or_create(user=user)
+        stats.rank = ''
+        stats.wins = 0
+        stats.losses = 0
+        stats.total_matches = 0
+        stats.last_synced_at = timezone.now()
+        stats.raw_data = data
+        stats.save()
+        MatchHistory.objects.filter(user=user).delete()
+        return stats
 
     if settings.CS2_STATS_API_URL:
         url = f"{settings.CS2_STATS_API_URL}/players/{steam_id}"
@@ -132,12 +175,23 @@ def sync_cs2_stats_for_user(user):
             response = requests.get(url, headers=headers, timeout=20)
             response.raise_for_status()
         except requests.RequestException as exc:
-            raise ValidationError(f'Failed to fetch CS2 stats from provider: {exc}') from exc
+            data = _sync_from_public_profile(steam_id)
+            data['source'] = data.get('source') or 'public_profile'
+            data['note'] = (
+                f'Provider unavailable ({exc}). '
+                f"{data.get('note') or 'Limited mode: synced from public Steam profile only.'}"
+            )
+        else:
+            try:
+                data = response.json()
+            except ValueError as exc:
+                data = _sync_from_public_profile(steam_id)
+                data['source'] = data.get('source') or 'public_profile'
+                data['note'] = (
+                    f'Provider returned invalid JSON ({exc}). '
+                    f"{data.get('note') or 'Limited mode: synced from public Steam profile only.'}"
+                )
 
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise ValidationError('CS2 stats provider returned invalid JSON.') from exc
     else:
         data = _sync_from_public_profile(steam_id)
 

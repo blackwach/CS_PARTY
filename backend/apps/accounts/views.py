@@ -3,14 +3,13 @@ import logging
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.utils import timezone
 from rest_framework import generics, permissions, response, status, views
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.notifications.models import InAppNotification
-from .models import DirectConversation, DirectMessage, FriendRequest
+from .models import DirectConversation, FriendRequest
 from .serializers import (
     AllowedInvitersSerializer,
     ChatMessageCreateSerializer,
@@ -38,6 +37,7 @@ from .services import (
     get_or_create_direct_conversation,
     get_user_friendships,
     link_telegram_by_code,
+    mark_direct_messages_as_read,
     reset_password_by_token,
     send_account_deletion_email,
     send_direct_message,
@@ -330,12 +330,8 @@ class ChatMessagesView(views.APIView):
         if not are_friends(request.user, peer):
             return response.Response({'detail': 'Чат доступен только между друзьями.'}, status=status.HTTP_403_FORBIDDEN)
         conversation = get_or_create_direct_conversation(request.user, peer)
+        mark_direct_messages_as_read(request.user, peer)
         messages = conversation.messages.select_related('sender').all()[:200]
-        DirectMessage.objects.filter(
-            conversation=conversation,
-            sender=peer,
-            read_at__isnull=True,
-        ).update(read_at=timezone.now())
         return response.Response(ChatMessageSerializer(messages, many=True).data)
 
     def post(self, request, user_id: int):

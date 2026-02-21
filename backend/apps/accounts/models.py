@@ -64,6 +64,8 @@ class User(AbstractUser):
     pending_email = models.EmailField(blank=True)
     pending_email_previous = models.EmailField(blank=True)
     pending_email_expires_at = models.DateTimeField(blank=True, null=True)
+    last_seen_at = models.DateTimeField(blank=True, null=True)
+    ws_connection_count = models.PositiveIntegerField(default=0)
     telegram_chat_id = models.BigIntegerField(unique=True, blank=True, null=True)
     telegram_username = models.CharField(max_length=255, blank=True)
     telegram_notifications_enabled = models.BooleanField(default=True)
@@ -81,6 +83,10 @@ class User(AbstractUser):
         self.pending_email = ''
         self.pending_email_previous = ''
         self.pending_email_expires_at = None
+
+    @property
+    def is_online(self) -> bool:
+        return self.ws_connection_count > 0
 
 
 class EmailActionToken(models.Model):
