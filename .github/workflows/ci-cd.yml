@@ -35,48 +35,46 @@ jobs:
       - name: Django checks
         run: python manage.py check
 
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, linux]
-    timeout-minutes: 20
-    needs: test
-    concurrency:
-      group: cs-party-production
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v4
+deploy:
+  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  runs-on: [self-hosted, linux]
+  timeout-minutes: 20
+  needs: test
+  concurrency:
+    group: cs-party-production
+    cancel-in-progress: false
+  steps:
+    - uses: actions/checkout@v4
 
-      - name: Prepare backend env
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -n "${{ secrets.BACKEND_ENV_FILE }}" ]; then
-            printf "%s" "${{ secrets.BACKEND_ENV_FILE }}" > backend/.env
-          elif [ -f /opt/cs-party-secrets/backend.env ]; then
-            cp /opt/cs-party-secrets/backend.env backend/.env
-          else
-            echo "No env source found. Set secret BACKEND_ENV_FILE or create /opt/cs-party-secrets/backend.env"
-            exit 1
-          fi
+    - name: Prepare backend env
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -n "${{ secrets.BACKEND_ENV_FILE }}" ]; then
+          printf "%s" "${{ secrets.BACKEND_ENV_FILE }}" > backend/.env
+        elif [ -f /opt/cs-party-secrets/backend.env ]; then
+          sudo cp /opt/cs-party-secrets/backend.env backend/.env
+          sudo chown $USER:$USER backend/.env
+        else
+          echo "No env source found"
+          exit 1
+        fi
 
-      - name: Check docker-compose file
-        run: |
-          if [ ! -f docker-compose.yml ]; then
-            echo " docker-compose.yml not found in root directory"
-            exit 1
-          fi
-          echo " docker-compose.yml found"
+    - name: Clean up old containers
+      run: |
+        docker compose down --remove-orphans || true
+        docker system prune -f
 
-      - name: Deploy containers
-        run: |
-          docker compose up -d --build --remove-orphans
-          docker image prune -f
+    - name: Build and deploy
+      run: |
+        docker compose up -d --build --remove-orphans
+        docker image prune -f
 
-      - name: Show running services
-        run: docker compose ps
+    - name: Show running services
+      run: docker compose ps
 
-      - name: Verify deployment
-        run: |
-          echo "Deployment completed at $(date)"
-          echo "Services status:"
-          docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+    - name: Verify deployment
+      run: |
+        echo "✅ Deployment completed at $(date)"
+        echo "📊 Services status:"
+        docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
