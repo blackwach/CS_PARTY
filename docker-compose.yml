@@ -1,0 +1,131 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cs_party}
+      POSTGRES_USER: ${POSTGRES_USER:-cs_party}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cs_party}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cs_party} -d ${POSTGRES_DB:-cs_party}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cs_party_net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - cs_party_net
+
+  backend:
+    build:
+      context: ./backend
+    image: cs-party-backend:latest
+    restart: unless-stopped
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4
+    env_file:
+      - ./backend/.env
+    environment:
+      RUN_DB_MIGRATIONS: "1"
+      RUN_COLLECTSTATIC: "1"
+    volumes:
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - cs_party_net
+
+  celery_worker:
+    build:
+      context: ./backend
+    image: cs-party-backend:latest
+    restart: unless-stopped
+    command: celery -A config worker -l info
+    env_file:
+      - ./backend/.env
+    environment:
+      RUN_DB_MIGRATIONS: "0"
+      RUN_COLLECTSTATIC: "0"
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - cs_party_net
+
+  celery_beat:
+    build:
+      context: ./backend
+    image: cs-party-backend:latest
+    restart: unless-stopped
+    command: celery -A config beat -l info
+    env_file:
+      - ./backend/.env
+    environment:
+      RUN_DB_MIGRATIONS: "0"
+      RUN_COLLECTSTATIC: "0"
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - cs_party_net
+
+  telegram_bot:
+    build:
+      context: ./backend
+    image: cs-party-backend:latest
+    restart: unless-stopped
+    command: python manage.py run_telegram_bot
+    env_file:
+      - ./backend/.env
+    environment:
+      RUN_DB_MIGRATIONS: "0"
+      RUN_COLLECTSTATIC: "0"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - cs_party_net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ""
+    image: cs-party-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - static_data:/static:ro
+      - media_data:/media:ro
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - cs_party_net
+
+volumes:
+  postgres_data:
+  static_data:
+  media_data:
+
+networks:
+  cs_party_net:
+    driver: bridge

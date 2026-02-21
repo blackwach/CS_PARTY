@@ -1,0 +1,17 @@
+{
+  "name": "cs2-stats-service",
+  "version": "1.0.0",
+  "description": "CS2 stats via node-globaloffensive (Game Coordinator); exposes HTTP API for CS Party backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "globaloffensive": "^3.2.0",
+    "steam-totp": "^2.1.2",
+    "steam-user": "^5.0.0"
+  }
+}

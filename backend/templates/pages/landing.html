@@ -1,0 +1,41 @@
+﻿{% extends "pages/base.html" %}
+
+{% block title %}CS Party | Invite Squad{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1>Find your CS2 squad and launch matches on time</h1>
+    <p>
+        Register, verify e-mail, link Telegram, create rooms for 5 players and track readiness.
+        The service sends reminders 5 minutes before match start.
+    </p>
+    <div class="hero-actions">
+        <a class="btn" href="/api/auth/register/">API: Register</a>
+        <a class="btn ghost" href="/admin/">Admin</a>
+    </div>
+</section>
+
+<section class="grid">
+    <article class="card">
+        <h2>Security</h2>
+        <p>Email verification at sign-up, password reset links with 5 minute TTL, JWT access tokens with 1 hour TTL.</p>
+    </article>
+    <article class="card">
+        <h2>Telegram Bot</h2>
+        <p>Users can link Telegram and set readiness by command <code>/ready ROOMCODE</code>. Bot can deliver personal invites.</p>
+    </article>
+    <article class="card">
+        <h2>CS2 Stats</h2>
+        <p>Connect Steam account ID and sync rank, wins and match history from external API provider.</p>
+    </article>
+    <article class="card">
+        <h2>Room Flow</h2>
+        <p>Host creates a room for up to 5 players, invites friends, and tracks status until everyone is ready.</p>
+    </article>
+</section>
+
+<section class="notice">
+    <h3>18+ rule</h3>
+    <p>Registration is restricted to players older than 18 years. Birth date is required at sign-up.</p>
+</section>
+{% endblock %}

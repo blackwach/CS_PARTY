@@ -1,0 +1,13 @@
+﻿{% extends "pages/base.html" %}
+
+{% block title %}Email Verification | CS Party{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1>{% if success %}Email verified{% else %}Verification failed{% endif %}</h1>
+    <p>{{ message }}</p>
+    <div class="hero-actions">
+        <a class="btn" href="/">Back to home</a>
+    </div>
+</section>
+{% endblock %}

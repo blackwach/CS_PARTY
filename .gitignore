@@ -1,0 +1,26 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.sqlite3
+
+# Django
+backend/staticfiles/
+backend/media/
+backend/.env
+
+# CS2 Stats Service (Node)
+cs2-stats-service/.env
+cs2-stats-service/node_modules/
+
+# Docker
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+*.MD
