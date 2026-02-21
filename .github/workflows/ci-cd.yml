@@ -18,13 +18,20 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Setup virtual environment
+        run: |
+          python3 -m venv venv
+          echo "VIRTUAL_ENV=${PWD}/venv" >> $GITHUB_ENV
+          echo "${PWD}/venv/bin" >> $GITHUB_PATH
+      
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
       - name: Prepare env for checks
         run: cp .env.example .env
+      
       - name: Django checks
         run: python manage.py check
 
@@ -52,6 +59,14 @@ jobs:
             exit 1
           fi
 
+      - name: Check docker-compose file
+        run: |
+          if [ ! -f docker-compose.yml ]; then
+            echo " docker-compose.yml not found in root directory"
+            exit 1
+          fi
+          echo " docker-compose.yml found"
+
       - name: Deploy containers
         run: |
           docker compose up -d --build --remove-orphans
@@ -59,3 +74,9 @@ jobs:
 
       - name: Show running services
         run: docker compose ps
+
+      - name: Verify deployment
+        run: |
+          echo "Deployment completed at $(date)"
+          echo "Services status:"
+          docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
