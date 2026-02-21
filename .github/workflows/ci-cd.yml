@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: [self-hosted, linux, prod]
+    runs-on: [self-hosted, linux]
     timeout-minutes: 15
     defaults:
       run:
@@ -30,7 +30,7 @@ jobs:
 
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, linux, prod]
+    runs-on: [self-hosted, linux]
     timeout-minutes: 20
     needs: test
     concurrency:
