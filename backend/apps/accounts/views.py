@@ -1,7 +1,11 @@
-﻿from django.contrib.auth import get_user_model
+import logging
+
+from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import generics, permissions, response, status, views
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -55,7 +59,14 @@ class PasswordResetRequestView(views.APIView):
         serializer.is_valid(raise_exception=True)
         user = User.objects.filter(email__iexact=serializer.validated_data['email']).first()
         if user:
-            send_password_reset_email(user)
+            try:
+                send_password_reset_email(user)
+            except Exception as e:
+                logger.exception('Ошибка отправки письма сброса пароля: %s', e)
+                return response.Response(
+                    {'detail': 'Сервис отправки писем временно недоступен. Попробуйте позже или обратитесь к администратору.'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
         return response.Response({'detail': 'If email exists, reset link has been sent.'})
 
 

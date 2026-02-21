@@ -15,8 +15,10 @@ export default function ForgotPassword() {
     try {
       await auth.passwordResetRequest(email)
       setDone(true)
-    } catch {
-      setError('Не удалось отправить письмо. Проверьте email.')
+    } catch (err) {
+      const msg = err.response?.data?.detail
+      const text = typeof msg === 'string' ? msg : Array.isArray(msg) ? msg[0] : null
+      setError(text || 'Не удалось отправить письмо. Попробуйте позже или обратитесь к администратору.')
     } finally {
       setLoading(false)
     }
