@@ -97,7 +97,12 @@ class RegistrationSerializer(serializers.ModelSerializer):
         validated_data['username'] = username
 
         user = User.objects.create_user(password=password, is_active=False, **validated_data)
-        send_verification_email(user)
+        try:
+            send_verification_email(user)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception('Не удалось отправить письмо подтверждения: %s', e)
+            # Регистрация не отменяется — пользователь создан, письмо можно отправить позже
         return user
 
 

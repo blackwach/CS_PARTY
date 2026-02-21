@@ -34,12 +34,14 @@ export default function Register() {
     } catch (err) {
       const data = err.response?.data
       if (data) {
-        const first = data.email?.[0] || data.nickname?.[0] || data.password?.[0]
+        const detail = typeof data.detail === 'string' ? data.detail : Array.isArray(data.detail) ? data.detail[0] : null
+        const first = detail || data.non_field_errors?.[0]
+          || data.email?.[0] || data.nickname?.[0] || data.password?.[0]
           || data.password_confirm?.[0] || data.birth_date?.[0] || data.initials?.[0]
-          || (typeof data.password_confirm === 'object' && data.password_confirm?.password_confirm)
-        setError(first || 'Ошибка регистрации')
+          || data.username?.[0]
+        setError(first || (err.response?.status === 500 ? 'Ошибка на сервере. Попробуйте позже или проверьте данные.' : 'Ошибка регистрации'))
       } else {
-        setError('Ошибка регистрации')
+        setError(err.message === 'Network Error' ? 'Нет связи с сервером.' : 'Ошибка регистрации')
       }
     } finally {
       setLoading(false)
