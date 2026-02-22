@@ -86,6 +86,12 @@ export default function CS2Health() {
             <li>2FA secret задан: {boolLabel(health.bot_credentials?.two_factor_set)}</li>
           </ul>
 
+          {health.hint && (
+            <div className="alert alert-warning" style={{ marginTop: '0.5rem' }}>
+              {health.hint}
+            </div>
+          )}
+
           <h3 className="room-players-title">Состояние бота</h3>
           <ul className="cs2-health-list">
             <li>Steam logged_on: {boolLabel(health.service?.bot?.logged_on)}</li>

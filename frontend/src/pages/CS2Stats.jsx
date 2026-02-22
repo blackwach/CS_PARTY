@@ -70,23 +70,25 @@ export default function CS2Stats() {
   }
 
   return (
-    <>
-      <div className="cs2-stats-head">
+    <div className="cs2-stats-page">
+      <header className="cs2-stats-head">
         <h1 className="page-title">Статистика CS2</h1>
         <div className="cs2-stats-actions">
           <button type="button" className="btn btn-primary" onClick={sync} disabled={syncing}>
             {syncing ? 'Синхронизация...' : 'Синхронизировать'}
           </button>
           <Link to="/cs2/health" className="btn btn-secondary">
-            Health бота
+            Состояние бота
           </Link>
         </div>
+      </header>
+
+      <div className="cs2-stats-alerts">
+        {error && <div className="alert alert-error">{error}</div>}
+        {stats?.note && <div className="alert alert-warning">{stats.note}</div>}
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {stats?.note && <div className="alert alert-warning">{stats.note}</div>}
-
-      <div className="panel cs2-player-card">
+      <section className="panel cs2-player-card">
         <h2>Профиль игрока</h2>
         <p className="cs2-player-name">{user?.nickname || '-'}</p>
         {steamProfileUrl ? (
@@ -103,19 +105,19 @@ export default function CS2Stats() {
             Укажите ссылку на Steam-профиль в <Link to="/profile">профиле</Link>, затем нажмите "Синхронизировать".
           </p>
         )}
-      </div>
+      </section>
 
       {!stats ? (
-        <div className="panel">
+        <section className="panel">
           <p className="cs2-empty-hint">
             {steamProfileUrl
               ? 'Нажмите "Синхронизировать", чтобы обновить доступные данные.'
               : 'Добавьте Steam-профиль и выполните первую синхронизацию.'}
           </p>
-        </div>
+        </section>
       ) : (
         <>
-          <div className="panel">
+          <section className="panel">
             <h2>Обзор</h2>
             <div className="stat-grid">
               <div className="stat-box">
@@ -138,10 +140,10 @@ export default function CS2Stats() {
             <p className="cs2-updated-at">
               Обновлено: {formatDate(stats.last_synced_at)} | Источник: {stats.source || 'unknown'}
             </p>
-          </div>
+          </section>
 
           {stats.recent_matches?.length > 0 && (
-            <div className="panel">
+            <section className="panel">
               <h2>Последние матчи</h2>
               <ul className="cs2-matches-list">
                 {stats.recent_matches.map((item, index) => (
@@ -164,10 +166,10 @@ export default function CS2Stats() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </section>
           )}
         </>
       )}
-    </>
+    </div>
   )
 }

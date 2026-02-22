@@ -33,10 +33,8 @@ services:
       - ./backend/.env
     environment:
       PORT: 3100
-      CS2_STATS_API_TOKEN: ${CS2_STATS_API_TOKEN:-}
-      CS2_STATS_STEAM_USERNAME: ${CS2_STATS_STEAM_USERNAME:-${STEAM_USERNAME:-}}
-      CS2_STATS_STEAM_PASSWORD: ${CS2_STATS_STEAM_PASSWORD:-${STEAM_PASSWORD:-}}
-      CS2_STATS_STEAM_2FA_SECRET: ${CS2_STATS_STEAM_2FA_SECRET:-${STEAM_2FA_SECRET:-}}
+      # Не переопределять логин/пароль/2FA здесь — контейнер берёт их из env_file (backend/.env).
+      # Иначе пустые ${CS2_STATS_STEAM_*} из окружения compose затирают значения из backend/.env.
       CS2_STATS_CACHE_TTL_MS: ${CS2_STATS_CACHE_TTL_MS:-60000}
       CS2_STATS_REQUEST_TIMEOUT_MS: ${CS2_STATS_REQUEST_TIMEOUT_MS:-15000}
       CS2_STATS_RECONNECT_DELAY_MS: ${CS2_STATS_RECONNECT_DELAY_MS:-15000}

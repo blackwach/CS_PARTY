@@ -242,14 +242,15 @@ def get_cs2_stats_health() -> dict:
         'api_url': api_url,
         'api_token_configured': bool(settings.CS2_STATS_API_TOKEN),
         'bot_credentials': {
-            'username_set': bool(getattr(settings, 'CS2_STATS_STEAM_USERNAME', '')),
-            'password_set': bool(getattr(settings, 'CS2_STATS_STEAM_PASSWORD', '')),
-            'two_factor_set': bool(getattr(settings, 'CS2_STATS_STEAM_2FA_SECRET', '')),
+            'username_set': bool((getattr(settings, 'CS2_STATS_STEAM_USERNAME', None) or '').strip()),
+            'password_set': bool((getattr(settings, 'CS2_STATS_STEAM_PASSWORD', None) or '').strip()),
+            'two_factor_set': bool((getattr(settings, 'CS2_STATS_STEAM_2FA_SECRET', None) or '').strip()),
         },
         'service_reachable': False,
         'service_status_code': None,
         'service': None,
         'error': '',
+        'hint': '',
     }
 
     if not api_url:
@@ -279,4 +280,12 @@ def get_cs2_stats_health() -> dict:
 
     health['service_reachable'] = True
     health['service'] = payload
+    # Подсказка: бэкенд видит учётные данные, а сервис бота — нет (часто из-за compose environment).
+    last_err = (payload.get('bot') or {}).get('last_error') or ''
+    creds_ok = health['bot_credentials'].get('username_set') and health['bot_credentials'].get('password_set')
+    if creds_ok and 'not set' in last_err.lower():
+        health['hint'] = (
+            'Логин/пароль заданы в backend/.env, но сервис бота их не видит. '
+            'Перезапустите контейнер: docker compose up -d cs2_stats_service --force-recreate'
+        )
     return health
