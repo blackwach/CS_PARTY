@@ -68,7 +68,8 @@ const STEAM_EMAIL_IMAP_MAX_MESSAGES = parseInt(
   10
 );
 const STEAM_EMAIL_FROM_FILTER = (process.env.CS2_STATS_STEAM_EMAIL_FROM_FILTER || 'noreply@steampowered.com').trim();
-const STEAM_EMAIL_SUBJECT_FILTER = (process.env.CS2_STATS_STEAM_EMAIL_SUBJECT_FILTER || 'Steam Guard').trim();
+// "Steam" находит и "Steam Guard", и "Ваш аккаунт Steam: доступ с нового компьютера"
+const STEAM_EMAIL_SUBJECT_FILTER = (process.env.CS2_STATS_STEAM_EMAIL_SUBJECT_FILTER || 'Steam').trim();
 const STEAM_EMAIL_GUARD_ENABLED = parseBool(
   process.env.CS2_STATS_STEAM_EMAIL_GUARD_ENABLED,
   false
@@ -327,32 +328,54 @@ function parseSearchUids(searchResponse) {
     .filter((item) => /^\d+$/.test(item));
 }
 
-function extractSteamGuardCode(messageText) {
-  const text = String(messageText || '').replace(/\r/g, '\n');
+/** Убирает HTML-теги (Steam шлёт письма в HTML). */
+function stripHtml(html) {
+  return String(html || '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  const contextualPatterns = [
-    /steam\s*guard[^A-Z0-9]{0,60}([A-Z0-9]{5})/i,
-    /(?:guard|код|code)[^A-Z0-9]{0,30}([A-Z0-9]{5})/i,
+function extractSteamGuardCode(messageText) {
+  const raw = String(messageText || '').replace(/\r/g, '\n');
+  const text = stripHtml(raw) + ' ' + raw;
+
+  const take = (match) => {
+    if (!match || !match[1]) return null;
+    const c = match[1].toUpperCase();
+    return COMMON_NON_CODE_TOKENS.has(c) ? null : c;
+  };
+
+  const patterns = [
+    // Письмо как на скрине: "код Steam Guard:" ... "Россия" ... крупно код 4Q9VX
+    /(?:понадобится\s+)?код\s+Steam\s+Guard[^A-Z0-9]{0,280}([A-Z0-9]{5})\b/i,
+    /Россия[^A-Z0-9]{0,120}([A-Z0-9]{5})\b/i,
+    /страны:\s*[^A-Z0-9]{0,80}([A-Z0-9]{5})\b/i,
+    /steam\s*guard[^A-Z0-9]{0,120}([A-Z0-9]{5})\b/i,
+    /(?:guard|код|code)[^A-Z0-9]{0,80}([A-Z0-9]{5})\b/i,
+    /you\s+need\s+(?:the\s+)?(?:steam\s+guard\s+)?code[^A-Z0-9]{0,120}([A-Z0-9]{5})\b/i,
   ];
-  for (const pattern of contextualPatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      const candidate = match[1].toUpperCase();
-      if (!COMMON_NON_CODE_TOKENS.has(candidate)) return candidate;
-    }
+  for (const re of patterns) {
+    const candidate = take(text.match(re));
+    if (candidate) return candidate;
   }
 
-  const steamLines = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => /steam|guard|код|code/i.test(line));
-  for (const line of steamLines) {
-    const match = line.match(/\b([A-Z0-9]{5})\b/i);
-    if (!match || !match[1]) continue;
-    const candidate = match[1].toUpperCase();
+  const steamLines = text.split(/\s+/).filter((t) => /steam|guard|код|code|россия/i.test(t));
+  for (let i = 0; i < steamLines.length; i++) {
+    const m = steamLines[i].match(/\b([A-Z0-9]{5})\b/i);
+    if (!m) continue;
+    const candidate = m[1].toUpperCase();
     if (!COMMON_NON_CODE_TOKENS.has(candidate)) return candidate;
   }
-
+  const allFive = text.match(/\b([A-Z0-9]{5})\b/gi);
+  if (allFive) {
+    for (const w of allFive) {
+      const c = String(w).toUpperCase();
+      if (!COMMON_NON_CODE_TOKENS.has(c)) return c;
+    }
+  }
   return '';
 }
 
@@ -361,6 +384,11 @@ function extractMessageDate(messageText) {
   if (!match || !match[1]) return null;
   const parsed = new Date(match[1].trim());
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function extractMessageFrom(messageText) {
+  const match = String(messageText || '').match(/^From:\s*(.+)$/im);
+  return (match && match[1] ? match[1].trim() : '').toLowerCase();
 }
 
 function wasCodeSubmittedRecently(code) {
@@ -411,6 +439,8 @@ async function fetchSteamGuardCodeFromEmail() {
         if (messageDate && Date.now() - messageDate.getTime() > 30 * 60 * 1000) {
           continue;
         }
+        const from = extractMessageFrom(fetchResponse);
+        if (from && !from.includes('steampowered.com')) continue;
 
         const code = extractSteamGuardCode(fetchResponse);
         if (!code || wasCodeSubmittedRecently(code)) continue;
