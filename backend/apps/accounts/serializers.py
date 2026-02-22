@@ -16,6 +16,7 @@ User = get_user_model()
 
 STEAM_PROFILES_RE = re.compile(r'steamcommunity\.com/profiles/(\d{17})(?:[/?#]|$)', re.IGNORECASE)
 STEAM_ID_RE = re.compile(r'steamcommunity\.com/id/([^/?#]+)(?:[/?#]|$)', re.IGNORECASE)
+CS2_MATCH_TOKEN_RE = re.compile(r'^[A-Za-z0-9_-]{8,128}$')
 
 
 def steam_id_from_profile_url(url: str) -> str | None:
@@ -118,6 +119,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
 class ProfileSerializer(serializers.ModelSerializer):
     steam_profile_url = serializers.URLField(required=False, allow_blank=True, max_length=512)
+    cs2_match_token = serializers.CharField(required=False, allow_blank=True, max_length=128)
     avatar = serializers.ImageField(required=False, allow_null=True)
     pending_email = serializers.EmailField(read_only=True)
     pending_email_expires_at = serializers.DateTimeField(read_only=True)
@@ -139,6 +141,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             'avatar',
             'steam_account_id',
             'steam_profile_url',
+            'cs2_match_token',
             'telegram_chat_id',
             'telegram_username',
             'telegram_notifications_enabled',
@@ -184,6 +187,16 @@ class ProfileSerializer(serializers.ModelSerializer):
         else:
             raise serializers.ValidationError('Некорректная ссылка на Steam-профиль.')
         return url
+
+    def validate_cs2_match_token(self, value: str):
+        cleaned = str(value or '').strip()
+        if not cleaned:
+            return ''
+        if not CS2_MATCH_TOKEN_RE.fullmatch(cleaned):
+            raise serializers.ValidationError(
+                'Некорректный CS2 match token. Допустимы 8-128 символов: буквы, цифры, "_" и "-".'
+            )
+        return cleaned
 
     def update(self, instance, validated_data):
         requested_email = validated_data.pop('email', None)

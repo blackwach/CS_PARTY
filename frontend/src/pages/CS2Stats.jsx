@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
 import { cs2 as cs2Api } from '../api'
+import { useAuth } from '../context/AuthContext'
+import { getCs2MapMeta } from '../utils/cs2Presentation'
 
 const STEAM_PROFILE_BASE = 'https://steamcommunity.com/profiles/'
 const CS2_BOT_ADMIN_EMAIL = 'backwach1@yandex.ru'
+
 const RESULT_LABELS = {
   win: 'Победа',
   lose: 'Поражение',
@@ -81,9 +83,10 @@ export default function CS2Stats() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState('')
+
   const steamProfileUrl = user?.steam_profile_url || (user?.steam_account_id ? `${STEAM_PROFILE_BASE}${user.steam_account_id}` : null)
 
-  const load = () => {
+  useEffect(() => {
     setError('')
     cs2Api
       .getStats()
@@ -96,10 +99,6 @@ export default function CS2Stats() {
         setError(extractApiError(err, 'Не удалось загрузить статистику CS2.'))
       })
       .finally(() => setLoading(false))
-  }
-
-  useEffect(() => {
-    load()
   }, [])
 
   const sync = () => {
@@ -115,9 +114,9 @@ export default function CS2Stats() {
   const averages = stats?.averages || {}
   const rankId = Number.isInteger(stats?.rank_id) ? stats.rank_id : null
   const rankName = stats?.rank || 'Без ранга'
+  const rankBadge = useMemo(() => getRankBadgeDataUrl(rankId, rankName), [rankId, rankName])
   const premierRating = Number.isFinite(Number(stats?.premier_rating)) ? Number(stats.premier_rating) : null
   const mapRanks = Array.isArray(stats?.map_ranks) ? stats.map_ranks : []
-  const rankBadge = useMemo(() => getRankBadgeDataUrl(rankId, rankName), [rankId, rankName])
   const isBotAdmin = String(user?.email || '').trim().toLowerCase() === CS2_BOT_ADMIN_EMAIL
 
   if (loading) {
@@ -163,7 +162,7 @@ export default function CS2Stats() {
           </p>
         ) : (
           <p className="cs2-profile-link">
-            Укажите ссылку на Steam-профиль в <Link to="/profile">профиле</Link>, затем нажмите "Синхронизировать".
+            Укажите ссылку на Steam-профиль в <Link to="/profile">профиле</Link>, затем нажмите «Синхронизировать».
           </p>
         )}
       </section>
@@ -172,14 +171,14 @@ export default function CS2Stats() {
         <section className="panel">
           <p className="cs2-empty-hint">
             {steamProfileUrl
-              ? 'Нажмите "Синхронизировать", чтобы обновить доступные данные.'
+              ? 'Нажмите «Синхронизировать», чтобы обновить доступные данные.'
               : 'Добавьте Steam-профиль и выполните первую синхронизацию.'}
           </p>
         </section>
       ) : (
         <>
           <section className="panel">
-            <h2>Обзор</h2>
+            <h2>Основная статистика</h2>
             <div className="stat-grid">
               <div className="stat-box stat-box-rank">
                 <img className="cs2-rank-badge" src={rankBadge} alt={rankName} />
@@ -228,42 +227,72 @@ export default function CS2Stats() {
 
           {mapRanks.length > 0 && (
             <section className="panel">
-              <h2>Ранги по картам</h2>
+              <h2>Основная статистика по картам</h2>
               <ul className="cs2-map-ranks-list">
-                {mapRanks.map((item, index) => (
-                  <li key={`${item.map || 'map'}-${index}`} className="cs2-map-rank-item">
-                    <span className="cs2-map-rank-map">{item.map || 'Карта'}</span>
-                    <span className="badge badge-open">{item.rank || `Ранг ${item.rank_id ?? '-'}`}</span>
-                  </li>
-                ))}
+                {mapRanks.map((item, index) => {
+                  const mapMeta = getCs2MapMeta(item.map)
+                  const parsedRankId = Number(item.rank_id)
+                  const mapRankId = Number.isInteger(parsedRankId) ? parsedRankId : null
+                  const mapRankName = item.rank || `Ранг ${item.rank_id ?? '-'}`
+                  const mapRankBadge = getRankBadgeDataUrl(mapRankId, mapRankName)
+                  const wins = Number(item.wins ?? 0)
+                  const losses = Number(item.losses ?? 0)
+                  const matchesCount = Number(item.matches ?? Math.max(wins + losses, 0))
+                  const winRate = Number.isFinite(Number(item.win_rate))
+                    ? Number(item.win_rate)
+                    : matchesCount > 0
+                      ? (wins / matchesCount) * 100
+                      : 0
+
+                  return (
+                    <li key={`${item.map || 'map'}-${index}`} className="cs2-map-rank-item">
+                      <img className="cs2-map-rank-thumb" src={mapMeta.image} alt={mapMeta.title} loading="lazy" />
+                      <div className="cs2-map-rank-main">
+                        <span className="cs2-map-rank-map">{mapMeta.title}</span>
+                        <span className="cs2-map-rank-code">{mapMeta.code}</span>
+                        <span className="cs2-map-rank-stats">
+                          W/L: {formatNumber(wins, 0)}/{formatNumber(losses, 0)} | WR: {formatNumber(winRate, 2)}% | M:{' '}
+                          {formatNumber(matchesCount, 0)}
+                        </span>
+                      </div>
+                      <div className="cs2-map-rank-rank">
+                        <img className="cs2-rank-badge cs2-rank-badge-mini" src={mapRankBadge} alt={mapRankName} />
+                        <span className="badge badge-open">{mapRankName}</span>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             </section>
           )}
 
           {stats.recent_matches?.length > 0 && (
             <section className="panel">
-              <h2>Последние матчи</h2>
+              <h2>История матчей</h2>
               <ul className="cs2-matches-list">
-                {stats.recent_matches.map((item, index) => (
-                  <li key={item.external_match_id || index} className="cs2-match-row">
-                    <span className="cs2-match-meta">
-                      {item.map_name || '-'} | {formatDate(item.played_at)}
-                    </span>
-                    <span className="cs2-match-stats">
-                      K/D/A: {item.kills ?? 0}/{item.deaths ?? 0}/{item.assists ?? 0}
-                      <span className="cs2-match-hs">HS: {formatNumber(item.headshot_percent ?? 0)}%</span>
-                      {item.result != null && (
-                        <span
-                          className={`badge ${
-                            item.result === 'win' ? 'badge-joined' : item.result === 'draw' ? 'badge-invited' : 'badge-declined'
-                          }`}
-                        >
-                          {RESULT_LABELS[item.result] || 'Матч'}
-                        </span>
-                      )}
-                    </span>
-                  </li>
-                ))}
+                {stats.recent_matches.map((item, index) => {
+                  const mapMeta = getCs2MapMeta(item.map_name)
+                  return (
+                    <li key={item.external_match_id || index} className="cs2-match-row">
+                      <span className="cs2-match-meta">
+                        {mapMeta.title || '-'} | {formatDate(item.played_at)}
+                      </span>
+                      <span className="cs2-match-stats">
+                        K/D/A: {item.kills ?? 0}/{item.deaths ?? 0}/{item.assists ?? 0}
+                        <span className="cs2-match-hs">HS: {formatNumber(item.headshot_percent ?? 0)}%</span>
+                        {item.result != null && (
+                          <span
+                            className={`badge ${
+                              item.result === 'win' ? 'badge-joined' : item.result === 'draw' ? 'badge-invited' : 'badge-declined'
+                            }`}
+                          >
+                            {RESULT_LABELS[item.result] || 'Матч'}
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  )
+                })}
               </ul>
             </section>
           )}
@@ -272,3 +301,4 @@ export default function CS2Stats() {
     </div>
   )
 }
+

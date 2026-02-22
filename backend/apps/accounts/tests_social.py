@@ -84,3 +84,25 @@ class SocialApiTests(APITestCase):
         self.assertIn('steam_profile_url', response.data)
         self.assertIn('is_online', response.data)
         self.assertIn('last_seen_at', response.data)
+
+    def test_profile_can_store_cs2_match_token(self):
+        self.client.force_authenticate(user=self.alice)
+        response = self.client.patch(
+            '/api/auth/me/',
+            {'cs2_match_token': 'TOKEN_12345678'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['cs2_match_token'], 'TOKEN_12345678')
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.cs2_match_token, 'TOKEN_12345678')
+
+    def test_profile_rejects_invalid_cs2_match_token(self):
+        self.client.force_authenticate(user=self.alice)
+        response = self.client.patch(
+            '/api/auth/me/',
+            {'cs2_match_token': 'invalid token with spaces'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('cs2_match_token', response.data)

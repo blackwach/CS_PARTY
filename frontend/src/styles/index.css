@@ -904,6 +904,10 @@ input, button, select, textarea {
 .user-profile-cs2 {
   max-width: 48rem;
 }
+.user-profile-cs2-section-title {
+  margin: 0.35rem 0 0.6rem;
+  font-size: 0.98rem;
+}
 .user-profile-cs2-rank {
   min-height: 8rem;
 }
@@ -919,22 +923,50 @@ input, button, select, textarea {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
-  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.6rem;
 }
 .user-profile-map-rank-item {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-elevated);
-  padding: 0.45rem 0.55rem;
+  padding: 0.5rem;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: stretch;
+  gap: 0.6rem;
+  min-height: 5rem;
+}
+.user-profile-map-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 0.15rem;
 }
 .user-profile-map-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.user-profile-map-code {
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.user-profile-map-stats {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+.user-profile-map-rank-box {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+}
+.user-profile-match-history {
+  margin-top: 1rem;
 }
 .user-profile-cs2-updated {
   margin-top: 0.75rem;
@@ -1625,22 +1657,61 @@ input, button, select, textarea {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 0.6rem;
 }
 .cs2-map-rank-item {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-elevated);
-  padding: 0.45rem 0.6rem;
+  padding: 0.5rem;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.55rem;
+  align-items: stretch;
+  gap: 0.6rem;
+  min-height: 5rem;
+}
+.cs2-map-rank-thumb {
+  width: 5.5rem;
+  min-width: 5.5rem;
+  height: 4.4rem;
+  border-radius: 0.55rem;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: #0f172a;
+}
+.cs2-map-rank-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 0.18rem;
 }
 .cs2-map-rank-map {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.cs2-map-rank-code {
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.cs2-map-rank-stats {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.cs2-map-rank-rank {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+}
+.cs2-rank-badge-mini {
+  width: 2.2rem;
+  height: 2.2rem;
+  filter: drop-shadow(0 3px 8px #00000055);
 }
 .cs2-health-head {
   display: flex;

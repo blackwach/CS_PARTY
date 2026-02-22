@@ -264,6 +264,10 @@ def _sync_from_public_profile(steam_id: str) -> dict:
 
 def sync_cs2_stats_for_user(user):
     steam_id = _get_or_resolve_steam_account_id(user)
+    stats = PlayerStats.objects.filter(user=user).first()
+    previous_raw_data = stats.raw_data if stats else {}
+    previous_share_code_cursor = str((previous_raw_data or {}).get('share_code_cursor') or '').strip()
+    match_token = str(getattr(user, 'cs2_match_token', '') or '').strip()
     if not steam_id:
         data = {
             'rank': '',
@@ -275,7 +279,8 @@ def sync_cs2_stats_for_user(user):
             'note': 'Ограниченный режим: укажите ссылку на Steam-профиль в настройках профиля.',
             'profile_name': '',
         }
-        stats, _ = PlayerStats.objects.get_or_create(user=user)
+        if not stats:
+            stats = PlayerStats.objects.create(user=user)
         stats.rank = ''
         stats.wins = 0
         stats.losses = 0
@@ -289,11 +294,16 @@ def sync_cs2_stats_for_user(user):
     if settings.CS2_STATS_API_URL:
         url = f"{settings.CS2_STATS_API_URL}/players/{steam_id}"
         headers = {}
+        params = {}
+        if match_token:
+            params['match_token'] = match_token
+            if previous_share_code_cursor:
+                params['share_code_cursor'] = previous_share_code_cursor
         if settings.CS2_STATS_API_TOKEN:
             headers['Authorization'] = f"Bearer {settings.CS2_STATS_API_TOKEN}"
 
         try:
-            response = requests.get(url, headers=headers, timeout=20)
+            response = requests.get(url, headers=headers, params=params, timeout=20)
             response.raise_for_status()
         except requests.RequestException as exc:
             data = _sync_from_public_profile(steam_id)
@@ -316,7 +326,8 @@ def sync_cs2_stats_for_user(user):
     else:
         data = _sync_from_public_profile(steam_id)
 
-    stats, _ = PlayerStats.objects.get_or_create(user=user)
+    if not stats:
+        stats = PlayerStats.objects.create(user=user)
     stats.rank = data.get('rank', '') or ''
     stats.wins = int(data.get('wins', 0) or 0)
     stats.losses = int(data.get('losses', 0) or 0)
@@ -325,10 +336,15 @@ def sync_cs2_stats_for_user(user):
     stats.raw_data = data
     stats.save()
 
+    history_mode = str(data.get('history_mode') or '').strip().lower()
+    if history_mode not in {'snapshot', 'incremental'}:
+        history_mode = 'snapshot'
+
     matches = data.get('matches', [])
     if not matches:
         # In public-profile mode we have no reliable match history.
-        MatchHistory.objects.filter(user=user).delete()
+        if history_mode == 'snapshot':
+            MatchHistory.objects.filter(user=user).delete()
     else:
         seen_ids: set[str] = set()
         synced_match_ids: list[str] = []
@@ -360,10 +376,11 @@ def sync_cs2_stats_for_user(user):
             )
 
         # Keep only current provider snapshot to avoid stale/inflated aggregates.
-        if synced_match_ids:
-            MatchHistory.objects.filter(user=user).exclude(external_match_id__in=synced_match_ids).delete()
-        else:
-            MatchHistory.objects.filter(user=user).delete()
+        if history_mode == 'snapshot':
+            if synced_match_ids:
+                MatchHistory.objects.filter(user=user).exclude(external_match_id__in=synced_match_ids).delete()
+            else:
+                MatchHistory.objects.filter(user=user).delete()
 
     return stats
 

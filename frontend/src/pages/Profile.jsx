@@ -13,6 +13,7 @@ export default function Profile() {
     initials: '',
     about: '',
     steam_profile_url: '',
+    cs2_match_token: '',
     telegram_notifications_enabled: true,
   })
   const [avatarFile, setAvatarFile] = useState(null)
@@ -34,6 +35,7 @@ export default function Profile() {
       initials: user.initials || '',
       about: user.about || '',
       steam_profile_url: user.steam_profile_url || '',
+      cs2_match_token: user.cs2_match_token || '',
       telegram_notifications_enabled: user.telegram_notifications_enabled !== false,
     })
   }, [user])
@@ -61,6 +63,7 @@ export default function Profile() {
       payload.append('initials', form.initials.trim())
       payload.append('about', form.about.trim())
       payload.append('steam_profile_url', form.steam_profile_url.trim())
+      payload.append('cs2_match_token', form.cs2_match_token.trim())
       payload.append('telegram_notifications_enabled', String(form.telegram_notifications_enabled))
       if (avatarFile) payload.append('avatar', avatarFile)
 
@@ -82,6 +85,7 @@ export default function Profile() {
         data.nickname?.[0] ||
         data.initials?.[0] ||
         data.steam_profile_url?.[0] ||
+        data.cs2_match_token?.[0] ||
         data.avatar?.[0] ||
         data.detail ||
         'Не удалось сохранить профиль.'
@@ -217,6 +221,20 @@ export default function Profile() {
               onChange={handleChange}
               placeholder="https://steamcommunity.com/profiles/76561198... или /id/yourname"
             />
+          </div>
+          <div className="form-group">
+            <label htmlFor="cs2_match_token">CS2 Match Token (steamidkey)</label>
+            <input
+              id="cs2_match_token"
+              name="cs2_match_token"
+              value={form.cs2_match_token}
+              onChange={handleChange}
+              placeholder="Token для полной истории матчей CS2"
+              autoComplete="off"
+            />
+            <p className="form-hint">
+              Укажите steamidkey из CS2 auth code, чтобы подтягивать полную историю матчей без обрезки.
+            </p>
           </div>
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Сохранение...' : 'Сохранить профиль'}

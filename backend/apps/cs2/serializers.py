@@ -53,6 +53,13 @@ def _to_int_or_none(value) -> int | None:
     return parsed
 
 
+def _to_int(value, default: int = 0) -> int:
+    parsed = _to_int_or_none(value)
+    if parsed is None:
+        return int(default)
+    return int(parsed)
+
+
 def _extract_premier_rating(raw_data: dict | None) -> int | None:
     raw = raw_data or {}
     candidates = [
@@ -123,15 +130,59 @@ def _extract_premier_rank_name(raw_data: dict | None) -> str:
     return ''
 
 
-def _extract_map_ranks(raw_data: dict | None) -> list[dict]:
+def _collect_map_stats_from_matches(obj: PlayerStats | None) -> dict[str, dict]:
+    if obj is None:
+        return {}
+
+    aggregate: dict[str, dict] = {}
+    for item in _unique_matches(obj):
+        map_name = str(item.map_name or '').strip()
+        if not map_name:
+            continue
+
+        key = map_name.lower()
+        if key not in aggregate:
+            aggregate[key] = {
+                'map': map_name,
+                'rank_id': None,
+                'rank': '',
+                'wins': 0,
+                'losses': 0,
+                'matches': 0,
+                'win_rate': 0.0,
+            }
+
+        row = aggregate[key]
+        row['matches'] += 1
+        if item.result == MatchHistory.RESULT_WIN:
+            row['wins'] += 1
+        elif item.result == MatchHistory.RESULT_LOSE:
+            row['losses'] += 1
+
+        match_rank_id = _to_int_or_none((item.raw_data or {}).get('rank_id'))
+        if row['rank_id'] is None and match_rank_id is not None:
+            row['rank_id'] = match_rank_id
+
+        rank_at_match = str(item.rank_at_match or '').strip()
+        if not row['rank'] and rank_at_match:
+            row['rank'] = rank_at_match
+
+    for row in aggregate.values():
+        matches = int(row['matches'] or 0)
+        wins = int(row['wins'] or 0)
+        row['win_rate'] = round((wins / matches) * 100, 2) if matches > 0 else 0.0
+    return aggregate
+
+
+def _extract_map_ranks(raw_data: dict | None, obj: PlayerStats | None = None) -> list[dict]:
     raw = raw_data or {}
     rows = raw.get('map_ranks') or raw.get('mapRanks') or []
-    if not isinstance(rows, list):
-        return []
+    row_items = rows if isinstance(rows, list) else []
+    match_stats = _collect_map_stats_from_matches(obj)
 
     seen_maps: set[str] = set()
     normalized: list[dict] = []
-    for index, row in enumerate(rows):
+    for index, row in enumerate(row_items):
         if not isinstance(row, dict):
             continue
 
@@ -142,17 +193,88 @@ def _extract_map_ranks(raw_data: dict | None) -> list[dict]:
         if map_key in seen_maps:
             continue
 
+        fallback = match_stats.get(map_key) or {}
         rank_id = _to_int_or_none(row.get('rank_id'))
-        rank_name = str(row.get('rank') or row.get('rank_name') or '').strip()
+        if rank_id is None:
+            rank_id = fallback.get('rank_id')
+
+        rank_name = str(row.get('rank') or row.get('rank_name') or '').strip() or str(fallback.get('rank') or '').strip()
+        wins = max(
+            _to_int(
+                row.get('wins')
+                or row.get('wins_count')
+                or row.get('win_count')
+                or row.get('winCount')
+                or fallback.get('wins')
+                or 0,
+                0,
+            ),
+            0,
+        )
+        losses = max(
+            _to_int(
+                row.get('losses')
+                or row.get('losses_count')
+                or row.get('loss_count')
+                or row.get('lossCount')
+                or fallback.get('losses')
+                or 0,
+                0,
+            ),
+            0,
+        )
+        matches = max(
+            _to_int(
+                row.get('matches')
+                or row.get('total_matches')
+                or row.get('totalMatches')
+                or row.get('games')
+                or fallback.get('matches')
+                or 0,
+                0,
+            ),
+            wins + losses,
+        )
+        raw_win_rate = row.get('win_rate') or row.get('winRate') or row.get('win_percent') or row.get('winPercent')
+        if raw_win_rate is None:
+            raw_win_rate = fallback.get('win_rate')
+        try:
+            parsed_win_rate = float(raw_win_rate) if raw_win_rate is not None else None
+        except (TypeError, ValueError):
+            parsed_win_rate = None
+        win_rate = round(max(min(parsed_win_rate, 100.0), 0.0), 2) if parsed_win_rate is not None else (
+            round((wins / matches) * 100, 2) if matches > 0 else 0.0
+        )
+
         normalized.append(
             {
                 'map': map_name,
                 'rank_id': rank_id,
                 'rank': rank_name,
+                'wins': wins,
+                'losses': losses,
+                'matches': matches,
+                'win_rate': win_rate,
             }
         )
         seen_maps.add(map_key)
 
+    for map_key, fallback in match_stats.items():
+        if map_key in seen_maps:
+            continue
+        normalized.append(
+            {
+                'map': fallback.get('map') or map_key,
+                'rank_id': fallback.get('rank_id'),
+                'rank': fallback.get('rank') or '',
+                'wins': int(fallback.get('wins') or 0),
+                'losses': int(fallback.get('losses') or 0),
+                'matches': int(fallback.get('matches') or 0),
+                'win_rate': round(float(fallback.get('win_rate') or 0.0), 2),
+            }
+        )
+
+    normalized.sort(key=lambda item: str(item.get('map') or ''))
     return normalized
 
 
@@ -284,7 +406,7 @@ class PlayerStatsSerializer(serializers.ModelSerializer):
         return _extract_premier_rank_name(obj.raw_data)
 
     def get_map_ranks(self, obj):
-        return _extract_map_ranks(obj.raw_data)
+        return _extract_map_ranks(obj.raw_data, obj=obj)
 
     def get_averages(self, obj):
         matches = _unique_matches(obj)
