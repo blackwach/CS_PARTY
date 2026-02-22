@@ -1286,7 +1286,13 @@ async function fetchHistoricalMatchesByShareCodes(
     try {
       nextCode = await fetchNextMatchSharingCode(steamId64, cleanedMatchToken, knownCode);
     } catch (err) {
-      response.error = err?.message || 'Failed to request next match sharing code';
+      const rawError = String(err?.message || '').trim();
+      if (/HTTP\s*403/i.test(rawError)) {
+        response.error =
+          'Steam API вернул 403 при запросе следующего match code. Проверьте CS2_STATS_STEAM_WEB_API_KEY и что указан корректный steamidkey (match token) для этого SteamID64.';
+      } else {
+        response.error = rawError || 'Failed to request next match sharing code';
+      }
       break;
     }
 
