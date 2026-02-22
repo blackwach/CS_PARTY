@@ -22,6 +22,10 @@ const API_TOKEN = (process.env.CS2_STATS_API_TOKEN || '').trim();
 const CACHE_TTL_MS = parseInt(process.env.CS2_STATS_CACHE_TTL_MS || '60000', 10);
 const REQUEST_TIMEOUT_MS = parseInt(process.env.CS2_STATS_REQUEST_TIMEOUT_MS || '15000', 10);
 const RECONNECT_DELAY_MS = parseInt(process.env.CS2_STATS_RECONNECT_DELAY_MS || '15000', 10);
+const RECONNECT_DELAY_THROTTLE_MS = parseInt(
+  process.env.CS2_STATS_RECONNECT_DELAY_THROTTLE_MS || '300000',
+  10
+);
 const STEAM_DATA_DIR = (process.env.CS2_STATS_STEAM_DATA_DIR || path.join(__dirname, '.steam-data')).trim();
 
 const STEAM_USERNAME =
@@ -65,6 +69,10 @@ const STEAM_EMAIL_IMAP_POLL_INTERVAL_MS = parseInt(
 );
 const STEAM_EMAIL_IMAP_MAX_MESSAGES = parseInt(
   process.env.CS2_STATS_STEAM_EMAIL_IMAP_MAX_MESSAGES || '8',
+  10
+);
+const STEAM_EMAIL_IMAP_FETCH_BODY_MAX = parseInt(
+  process.env.CS2_STATS_STEAM_EMAIL_IMAP_FETCH_BODY_MAX || '16384',
   10
 );
 const STEAM_EMAIL_FROM_FILTER = (process.env.CS2_STATS_STEAM_EMAIL_FROM_FILTER || 'noreply@steampowered.com').trim();
@@ -329,54 +337,162 @@ function parseSearchUids(searchResponse) {
 }
 
 /** Убирает HTML-теги (Steam шлёт письма в HTML). */
+function decodeHtmlEntities(text) {
+  return String(text || '')
+    .replace(/&#(\d+);/g, (_, dec) => {
+      const value = parseInt(dec, 10);
+      if (!Number.isFinite(value)) return '';
+      try {
+        return String.fromCodePoint(value);
+      } catch (_) {
+        return '';
+      }
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+      const value = parseInt(hex, 16);
+      if (!Number.isFinite(value)) return '';
+      try {
+        return String.fromCodePoint(value);
+      } catch (_) {
+        return '';
+      }
+    })
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+function decodeQuotedPrintable(text) {
+  const source = String(text || '');
+  if (!/=([0-9A-F]{2}|\r?\n)/i.test(source)) {
+    return source;
+  }
+
+  const bytes = [];
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === '=') {
+      const next = source[i + 1];
+      const next2 = source[i + 2];
+
+      // Soft line break in quoted-printable.
+      if (next === '\r' && next2 === '\n') {
+        i += 2;
+        continue;
+      }
+      if (next === '\n') {
+        i += 1;
+        continue;
+      }
+
+      const hex = source.slice(i + 1, i + 3);
+      if (/^[0-9A-F]{2}$/i.test(hex)) {
+        bytes.push(parseInt(hex, 16));
+        i += 2;
+        continue;
+      }
+    }
+
+    const code = source.charCodeAt(i);
+    bytes.push(code <= 0xff ? code : 0x20);
+  }
+
+  return Buffer.from(bytes).toString('utf8');
+}
+
 function stripHtml(html) {
-  return String(html || '')
+  return decodeHtmlEntities(
+    String(html || '')
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+  );
+}
+
+function normalizeSteamGuardCode(rawCode) {
+  const code = String(rawCode || '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{5}$/.test(code)) return '';
+  if (!/[A-Z]/.test(code)) return '';
+  return COMMON_NON_CODE_TOKENS.has(code) ? '' : code;
 }
 
 function extractSteamGuardCode(messageText) {
   const raw = String(messageText || '').replace(/\r/g, '\n');
-  const text = stripHtml(raw) + ' ' + raw;
+  const splitIndex = raw.indexOf('\n\n');
+  const body = splitIndex >= 0 ? raw.slice(splitIndex + 2) : raw;
+  const decodedBody = decodeQuotedPrintable(body);
+  const flattenedBody = stripHtml(decodedBody);
+  const textVariants = [decodedBody, flattenedBody, stripHtml(raw), raw]
+    .filter(Boolean)
+    .join('\n');
 
   const take = (match) => {
     if (!match || !match[1]) return null;
-    const c = match[1].toUpperCase();
-    return COMMON_NON_CODE_TOKENS.has(c) ? null : c;
+    const c = normalizeSteamGuardCode(match[1]);
+    return c || null;
   };
 
   const patterns = [
-    // Письмо как на скрине: "код Steam Guard:" ... "Россия" ... крупно код 4Q9VX
-    /(?:понадобится\s+)?код\s+Steam\s+Guard[^A-Z0-9]{0,280}([A-Z0-9]{5})\b/i,
-    /Россия[^A-Z0-9]{0,120}([A-Z0-9]{5})\b/i,
-    /страны:\s*[^A-Z0-9]{0,80}([A-Z0-9]{5})\b/i,
+    /(?:\u043f\u043e\u043d\u0430\u0434\u043e\u0431\u0438\u0442\u0441\u044f\s+)?\u043a\u043e\u0434\s+Steam\s+Guard[^A-Z0-9]{0,280}([A-Z0-9]{5})\b/i,
+    /\u0440\u043e\u0441\u0441\u0438\u044f[^A-Z0-9]{0,120}([A-Z0-9]{5})\b/i,
+    /\u0441\u0442\u0440\u0430\u043d\u044b:\s*[^A-Z0-9]{0,80}([A-Z0-9]{5})\b/i,
     /steam\s*guard[^A-Z0-9]{0,120}([A-Z0-9]{5})\b/i,
-    /(?:guard|код|code)[^A-Z0-9]{0,80}([A-Z0-9]{5})\b/i,
+    /(?:guard|\u043a\u043e\u0434|code|security\s+code)[^A-Z0-9]{0,120}([A-Z0-9]{5})\b/i,
     /you\s+need\s+(?:the\s+)?(?:steam\s+guard\s+)?code[^A-Z0-9]{0,120}([A-Z0-9]{5})\b/i,
+    /\b([A-Z0-9]{5})\b[^A-Z0-9]{0,90}(?:steam\s*guard|security\s+code|code|\u043a\u043e\u0434)\b/i,
   ];
   for (const re of patterns) {
-    const candidate = take(text.match(re));
+    const candidate = take(textVariants.match(re));
     if (candidate) return candidate;
   }
 
-  const steamLines = text.split(/\s+/).filter((t) => /steam|guard|код|code|россия/i.test(t));
-  for (let i = 0; i < steamLines.length; i++) {
-    const m = steamLines[i].match(/\b([A-Z0-9]{5})\b/i);
-    if (!m) continue;
-    const candidate = m[1].toUpperCase();
-    if (!COMMON_NON_CODE_TOKENS.has(candidate)) return candidate;
-  }
-  const allFive = text.match(/\b([A-Z0-9]{5})\b/gi);
-  if (allFive) {
-    for (const w of allFive) {
-      const c = String(w).toUpperCase();
-      if (!COMMON_NON_CODE_TOKENS.has(c)) return c;
+  const lines = textVariants.split(/\n+/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/(steam|guard|code|\u043a\u043e\u0434|\u0432\u0445\u043e\u0434|\u0434\u043e\u0441\u0442\u0443\u043f)/i.test(line)) {
+      continue;
+    }
+
+    for (let offset = 0; offset <= 2; offset++) {
+      const candidateLine = `${line} ${lines[i + offset] || ''}`;
+      const m = candidateLine.match(/\b([A-Z0-9]{5})\b/i);
+      const candidate = take(m);
+      if (candidate) return candidate;
     }
   }
-  return '';
+
+  // Last-resort fallback: choose a candidate with the strongest Steam-related context.
+  let bestCandidate = '';
+  let bestScore = 0;
+  const allCandidatesRegex = /\b([A-Z0-9]{5})\b/gi;
+  let match;
+  while ((match = allCandidatesRegex.exec(textVariants)) !== null) {
+    const candidate = normalizeSteamGuardCode(match[1]);
+    if (!candidate) continue;
+
+    const start = Math.max(0, match.index - 200);
+    const end = Math.min(textVariants.length, match.index + 200);
+    const window = textVariants.slice(start, end);
+
+    let score = 0;
+    if (/steam/i.test(window)) score += 2;
+    if (/guard/i.test(window)) score += 2;
+    if (/(?:\bcode\b|\u043a\u043e\u0434)/i.test(window)) score += 2;
+    if (/(?:login|account|\u0432\u0445\u043e\u0434|\u0434\u043e\u0441\u0442\u0443\u043f)/i.test(window)) score += 1;
+    if (match.index > textVariants.length * 0.35) score += 1;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestCandidate = candidate;
+    }
+  }
+
+  return bestScore > 0 ? bestCandidate : '';
 }
 
 function extractMessageDate(messageText) {
@@ -388,6 +504,11 @@ function extractMessageDate(messageText) {
 
 function extractMessageFrom(messageText) {
   const match = String(messageText || '').match(/^From:\s*(.+)$/im);
+  return (match && match[1] ? match[1].trim() : '').toLowerCase();
+}
+
+function extractMessageSubject(messageText) {
+  const match = String(messageText || '').match(/^Subject:\s*(.+)$/im);
   return (match && match[1] ? match[1].trim() : '').toLowerCase();
 }
 
@@ -432,18 +553,38 @@ async function fetchSteamGuardCodeFromEmail() {
         if (checkedUids.has(uid)) continue;
         checkedUids.add(uid);
 
-        const fetchResponse = await session.sendCommand(
-          `UID FETCH ${uid} (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)] BODY.PEEK[TEXT]<0.4096>)`
-        );
+        const maxBody = Math.min(Math.max(STEAM_EMAIL_IMAP_FETCH_BODY_MAX, 4096), 65536);
+        let fetchResponse;
+        try {
+          fetchResponse = await session.sendCommand(
+            `UID FETCH ${uid} (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)] BODY.PEEK[TEXT]<0.${maxBody}> BODY.PEEK[1.2]<0.${maxBody}>)`
+          );
+        } catch (_) {
+          fetchResponse = await session.sendCommand(
+            `UID FETCH ${uid} (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)] BODY.PEEK[TEXT]<0.${maxBody}>)`
+          );
+        }
         const messageDate = extractMessageDate(fetchResponse);
         if (messageDate && Date.now() - messageDate.getTime() > 30 * 60 * 1000) {
           continue;
         }
         const from = extractMessageFrom(fetchResponse);
-        if (from && !from.includes('steampowered.com')) continue;
+        const fromFilter = String(STEAM_EMAIL_FROM_FILTER || '').trim().toLowerCase();
+        if (from && fromFilter && !from.includes(fromFilter)) continue;
+        if (from && !fromFilter && !from.includes('steampowered.com')) continue;
+
+        const subject = extractMessageSubject(fetchResponse);
+        const subjectFilter = String(STEAM_EMAIL_SUBJECT_FILTER || '').trim().toLowerCase();
+        if (subjectFilter && subject && !subject.includes(subjectFilter)) continue;
 
         const code = extractSteamGuardCode(fetchResponse);
         if (!code || wasCodeSubmittedRecently(code)) continue;
+
+        try {
+          await session.sendCommand(`UID STORE ${uid} +FLAGS (\\Seen)`);
+        } catch (_) {
+          // помечаем прочитанным; при ошибке (например, только чтение) — не критично
+        }
         return code;
       }
 
@@ -512,12 +653,27 @@ function resetClient() {
   botState.gc_ready = false;
 }
 
-function scheduleReconnect(reason) {
+function isThrottleError(message, eresult) {
+  const msg = String(message || '').toLowerCase();
+  return (
+    msg.includes('throttle') ||
+    msg.includes('accountlogindeniedthrottle') ||
+    msg.includes('too many') ||
+    msg.includes('rate limit') ||
+    Number(eresult) === 87
+  );
+}
+
+function scheduleReconnect(reason, opts = {}) {
   if (reconnectTimer) return;
+  const delay = opts.throttle ? RECONNECT_DELAY_THROTTLE_MS : RECONNECT_DELAY_MS;
+  if (opts.throttle) {
+    console.warn(`[steam] throttle/denied — следующая попытка входа через ${Math.round(delay / 60000)} мин`);
+  }
   reconnectTimer = setTimeout(async () => {
     reconnectTimer = null;
     await connectBot(`reconnect: ${reason || 'unknown'}`);
-  }, RECONNECT_DELAY_MS);
+  }, delay);
 }
 
 function setLastError(message) {
@@ -532,6 +688,8 @@ function setupSteamHandlers() {
 
     if (lastCodeWrong) {
       console.warn('[steam] previous Steam Guard code was rejected');
+      lastSubmittedSteamGuardCode = '';
+      lastSubmittedSteamGuardAt = 0;
     }
 
     (async () => {
@@ -552,7 +710,10 @@ function setupSteamHandlers() {
           code = await fetchSteamGuardCodeFromEmail();
         }
 
-        const normalizedCode = String(code || '').trim().toUpperCase();
+        const normalizedCode = normalizeSteamGuardCode(code);
+        if (!normalizedCode) {
+          throw new Error('Resolved Steam Guard code has invalid format');
+        }
         callback(normalizedCode);
         lastSubmittedSteamGuardCode = normalizedCode;
         lastSubmittedSteamGuardAt = Date.now();
@@ -585,7 +746,8 @@ function setupSteamHandlers() {
     const message = err?.message || 'Steam error';
     setLastError(message);
     console.error('[steam] error:', message);
-    scheduleReconnect('steam-error');
+    const throttle = isThrottleError(message);
+    scheduleReconnect('steam-error', { throttle });
   });
 
   steamClient.on('disconnected', (eresult, msg) => {
@@ -595,7 +757,8 @@ function setupSteamHandlers() {
     const reason = msg || `eresult=${eresult}`;
     setLastError(`Steam disconnected: ${reason}`);
     console.warn('[steam] disconnected:', reason);
-    scheduleReconnect('steam-disconnected');
+    const throttle = isThrottleError(reason, eresult);
+    scheduleReconnect('steam-disconnected', { throttle });
   });
 
   csgo.on('connectedToGC', () => {
@@ -661,7 +824,8 @@ async function connectBot(source = 'startup') {
     const message = err?.message || 'Unknown connect error';
     setLastError(message);
     console.error('[bot] connect failed:', message);
-    scheduleReconnect('connect-failed');
+    const throttle = isThrottleError(message);
+    scheduleReconnect('connect-failed', { throttle });
   } finally {
     reconnectInProgress = false;
   }
