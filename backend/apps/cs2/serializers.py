@@ -182,12 +182,14 @@ def _extract_map_ranks(raw_data: dict | None, obj: PlayerStats | None = None) ->
 
     seen_maps: set[str] = set()
     normalized: list[dict] = []
-    for index, row in enumerate(row_items):
+    for row in row_items:
         if not isinstance(row, dict):
             continue
 
-        map_name = str(row.get('map') or row.get('map_name') or f'map_{index + 1}').strip()
+        map_name = str(row.get('map') or row.get('map_name') or '').strip()
         if not map_name:
+            continue
+        if re.fullmatch(r'map_\d+', map_name.lower()):
             continue
         map_key = map_name.lower()
         if map_key in seen_maps:

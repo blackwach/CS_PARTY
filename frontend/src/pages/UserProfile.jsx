@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { auth as authApi, cs2 as cs2Api } from '../api'
-import { getCs2MapMeta } from '../utils/cs2Presentation'
+import { CS2_PREMIER_MAP_POOL, getCs2MapMeta, normalizeCs2MapKey } from '../utils/cs2Presentation'
 
 const RANK_COLORS = {
   0: ['#3a3f46', '#5f6670'],
@@ -124,6 +124,44 @@ export default function UserProfile() {
   const rankName = csStats?.rank || 'Без ранга'
   const rankBadge = useMemo(() => getRankBadgeDataUrl(rankId, rankName), [rankId, rankName])
   const averages = csStats?.averages || {}
+  const mapRanks = useMemo(() => {
+    const fromApi = Array.isArray(csStats?.map_ranks) ? csStats.map_ranks : []
+    const byMap = new Map()
+
+    fromApi.forEach((item) => {
+      const rawMap = String(item?.map || item?.map_name || '').trim()
+      if (!rawMap || /^map_\d+$/i.test(rawMap)) return
+      const normalizedKey = normalizeCs2MapKey(rawMap)
+      const mapKey = normalizedKey && normalizedKey !== 'unknown' ? normalizedKey : rawMap
+      if (!byMap.has(mapKey)) {
+        byMap.set(mapKey, { ...item, map: mapKey })
+      }
+    })
+
+    CS2_PREMIER_MAP_POOL.forEach((mapKey) => {
+      if (!byMap.has(mapKey)) {
+        byMap.set(mapKey, {
+          map: mapKey,
+          rank_id: null,
+          rank: '',
+          wins: 0,
+          losses: 0,
+          matches: 0,
+          win_rate: 0,
+        })
+      }
+    })
+
+    const order = new Map(CS2_PREMIER_MAP_POOL.map((mapKey, index) => [mapKey, index]))
+    return [...byMap.values()].sort((left, right) => {
+      const leftMap = String(left?.map || '')
+      const rightMap = String(right?.map || '')
+      const leftOrder = order.has(leftMap) ? order.get(leftMap) : Number.MAX_SAFE_INTEGER
+      const rightOrder = order.has(rightMap) ? order.get(rightMap) : Number.MAX_SAFE_INTEGER
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder
+      return leftMap.localeCompare(rightMap)
+    })
+  }, [csStats?.map_ranks])
 
   if (loading) {
     return (
@@ -223,15 +261,15 @@ export default function UserProfile() {
               </div>
             </div>
 
-            {Array.isArray(csStats.map_ranks) && csStats.map_ranks.length > 0 && (
+            {mapRanks.length > 0 && (
               <div className="user-profile-map-ranks">
                 <h3>Основная статистика по картам</h3>
                 <ul className="user-profile-map-ranks-list">
-                  {csStats.map_ranks.map((item, index) => {
+                  {mapRanks.map((item, index) => {
                     const mapMeta = getCs2MapMeta(item.map)
                     const parsedRankId = Number(item.rank_id)
                     const mapRankId = Number.isInteger(parsedRankId) ? parsedRankId : null
-                    const mapRankName = item.rank || `Ранг ${item.rank_id ?? '-'}`
+                    const mapRankName = item.rank || (mapRankId !== null ? `Ранг ${item.rank_id}` : 'Без ранга')
                     const mapRankBadge = getRankBadgeDataUrl(mapRankId, mapRankName)
                     const wins = Number(item.wins ?? 0)
                     const losses = Number(item.losses ?? 0)

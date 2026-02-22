@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { cs2 as cs2Api } from '../api'
 import { useAuth } from '../context/AuthContext'
-import { getCs2MapMeta } from '../utils/cs2Presentation'
+import { CS2_PREMIER_MAP_POOL, getCs2MapMeta, normalizeCs2MapKey } from '../utils/cs2Presentation'
 
 const STEAM_PROFILE_BASE = 'https://steamcommunity.com/profiles/'
 const CS2_BOT_ADMIN_EMAIL = 'backwach1@yandex.ru'
@@ -116,7 +116,44 @@ export default function CS2Stats() {
   const rankName = stats?.rank || 'Без ранга'
   const rankBadge = useMemo(() => getRankBadgeDataUrl(rankId, rankName), [rankId, rankName])
   const premierRating = Number.isFinite(Number(stats?.premier_rating)) ? Number(stats.premier_rating) : null
-  const mapRanks = Array.isArray(stats?.map_ranks) ? stats.map_ranks : []
+  const mapRanks = useMemo(() => {
+    const fromApi = Array.isArray(stats?.map_ranks) ? stats.map_ranks : []
+    const byMap = new Map()
+
+    fromApi.forEach((item) => {
+      const rawMap = String(item?.map || item?.map_name || '').trim()
+      if (!rawMap || /^map_\d+$/i.test(rawMap)) return
+      const normalizedKey = normalizeCs2MapKey(rawMap)
+      const mapKey = normalizedKey && normalizedKey !== 'unknown' ? normalizedKey : rawMap
+      if (!byMap.has(mapKey)) {
+        byMap.set(mapKey, { ...item, map: mapKey })
+      }
+    })
+
+    CS2_PREMIER_MAP_POOL.forEach((mapKey) => {
+      if (!byMap.has(mapKey)) {
+        byMap.set(mapKey, {
+          map: mapKey,
+          rank_id: null,
+          rank: '',
+          wins: 0,
+          losses: 0,
+          matches: 0,
+          win_rate: 0,
+        })
+      }
+    })
+
+    const order = new Map(CS2_PREMIER_MAP_POOL.map((mapKey, index) => [mapKey, index]))
+    return [...byMap.values()].sort((left, right) => {
+      const leftMap = String(left?.map || '')
+      const rightMap = String(right?.map || '')
+      const leftOrder = order.has(leftMap) ? order.get(leftMap) : Number.MAX_SAFE_INTEGER
+      const rightOrder = order.has(rightMap) ? order.get(rightMap) : Number.MAX_SAFE_INTEGER
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder
+      return leftMap.localeCompare(rightMap)
+    })
+  }, [stats?.map_ranks])
   const isBotAdmin = String(user?.email || '').trim().toLowerCase() === CS2_BOT_ADMIN_EMAIL
 
   if (loading) {
@@ -233,7 +270,7 @@ export default function CS2Stats() {
                   const mapMeta = getCs2MapMeta(item.map)
                   const parsedRankId = Number(item.rank_id)
                   const mapRankId = Number.isInteger(parsedRankId) ? parsedRankId : null
-                  const mapRankName = item.rank || `Ранг ${item.rank_id ?? '-'}`
+                  const mapRankName = item.rank || (mapRankId !== null ? `Ранг ${item.rank_id}` : 'Без ранга')
                   const mapRankBadge = getRankBadgeDataUrl(mapRankId, mapRankName)
                   const wins = Number(item.wins ?? 0)
                   const losses = Number(item.losses ?? 0)

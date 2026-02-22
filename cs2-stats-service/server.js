@@ -56,7 +56,14 @@ const STEAM_2FA_SECRET =
   process.env.STEAM_2FA_SECRET ||
   process.env.STEAM_SHARED_SECRET ||
   '';
-const STEAM_WEB_API_KEY = (process.env.CS2_STATS_STEAM_WEB_API_KEY || process.env.STEAM_WEB_API_KEY || '').trim();
+const STEAM_WEB_API_KEY = (
+  process.env.CS2_STATS_STEAM_WEB_API_KEY ||
+  process.env.CS2_STATS_STEAM_API_KEY ||
+  process.env.CS2_STEAM_WEB_API_KEY ||
+  process.env.STEAM_WEB_API_KEY ||
+  process.env.STEAM_API_KEY ||
+  ''
+).trim();
 const STEAM_ID64_BASE = 76561197960265728n;
 
 const STEAM_EMAIL_IMAP_USER =
@@ -138,6 +145,39 @@ const RANK_NAMES = {
   16: 'Legendary Eagle Master',
   17: 'Supreme Master First Class',
   18: 'Global Elite',
+};
+
+const KNOWN_CS2_MAP_CODES = [
+  'de_ancient',
+  'de_anubis',
+  'de_dust2',
+  'de_inferno',
+  'de_mirage',
+  'de_nuke',
+  'de_train',
+  'de_overpass',
+  'de_vertigo',
+  'de_office',
+  'de_italy',
+  'de_cache',
+];
+const KNOWN_CS2_MAP_CODE_SET = new Set(KNOWN_CS2_MAP_CODES);
+const CS2_MAP_ALIASES = {
+  ancient: 'de_ancient',
+  anubis: 'de_anubis',
+  dust2: 'de_dust2',
+  dust_2: 'de_dust2',
+  dust_ii: 'de_dust2',
+  de_dust_2: 'de_dust2',
+  inferno: 'de_inferno',
+  mirage: 'de_mirage',
+  nuke: 'de_nuke',
+  train: 'de_train',
+  overpass: 'de_overpass',
+  vertigo: 'de_vertigo',
+  office: 'de_office',
+  italy: 'de_italy',
+  cache: 'de_cache',
 };
 
 const app = express();
@@ -699,6 +739,70 @@ function normalizeModeName(value) {
     .replace(/[_-]+/g, ' ');
 }
 
+function normalizeMapToken(value) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+}
+
+function normalizeMapCode(rawMap) {
+  const token = normalizeMapToken(rawMap);
+  if (!token) return '';
+  if (KNOWN_CS2_MAP_CODE_SET.has(token)) return token;
+  if (CS2_MAP_ALIASES[token]) return CS2_MAP_ALIASES[token];
+
+  const withoutPrefix = token.replace(/^(de_|cs_|ar_)/, '');
+  if (CS2_MAP_ALIASES[withoutPrefix]) return CS2_MAP_ALIASES[withoutPrefix];
+  if (KNOWN_CS2_MAP_CODE_SET.has(`de_${withoutPrefix}`)) return `de_${withoutPrefix}`;
+  return token.startsWith('de_') ? token : '';
+}
+
+function extractMapCodeFromText(value) {
+  const token = normalizeMapToken(value);
+  if (!token) return '';
+  const direct = normalizeMapCode(token);
+  if (direct) return direct;
+
+  const searchable = `_${token}_`;
+  for (const [alias, mapCode] of Object.entries(CS2_MAP_ALIASES)) {
+    if (searchable.includes(`_${alias}_`)) {
+      return mapCode;
+    }
+  }
+  return '';
+}
+
+function resolveMapFromRankingEntry(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+
+  const candidates = [
+    entry.map_name,
+    entry.mapName,
+    entry.map,
+    entry.group,
+    entry.group_name,
+    entry.groupName,
+    entry.leaderboard_name,
+    entry.leaderboardName,
+    entry.leaderboard,
+    entry.rank_type_name,
+    entry.rankTypeName,
+    entry.mode_name,
+    entry.modeName,
+    entry.rank_type,
+    entry.rankType,
+    entry.mode,
+    entry.name,
+  ];
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const mapCode = extractMapCodeFromText(candidates[index]);
+    if (mapCode) return mapCode;
+  }
+
+  return '';
+}
+
 function hashString(value) {
   const source = String(value || '');
   let hash = 2166136261;
@@ -940,6 +1044,8 @@ function resolveGcRoundStatsForPlayer(matchEntry, steamId64) {
 
   return {
     map:
+      normalizeMapCode(matchEntry.map || matchEntry.map_name || matchEntry.mapName || '') ||
+      normalizeMapCode(finalRound.map || matchEntry?.watchablematchinfo?.game_map || '') ||
       normalizeText(matchEntry.map || matchEntry.map_name || matchEntry.mapName || '') ||
       normalizeText(finalRound.map || matchEntry?.watchablematchinfo?.game_map || ''),
     result,
@@ -956,14 +1062,23 @@ function normalizeGcMatchEntryForPlayer(matchEntry, steamId64, fallbackIndex = 0
   if (!matchEntry || typeof matchEntry !== 'object') return null;
 
   const resolvedFromRounds = resolveGcRoundStatsForPlayer(matchEntry, steamId64);
-  const map = normalizeText(
-    matchEntry.map ||
-      matchEntry.map_name ||
-      matchEntry.mapName ||
-      matchEntry?.watchablematchinfo?.game_map ||
-      resolvedFromRounds?.map ||
-      ''
-  );
+  const map =
+    normalizeMapCode(
+      matchEntry.map ||
+        matchEntry.map_name ||
+        matchEntry.mapName ||
+        matchEntry?.watchablematchinfo?.game_map ||
+        resolvedFromRounds?.map ||
+        ''
+    ) ||
+    normalizeText(
+      matchEntry.map ||
+        matchEntry.map_name ||
+        matchEntry.mapName ||
+        matchEntry?.watchablematchinfo?.game_map ||
+        resolvedFromRounds?.map ||
+        ''
+    );
   const playedAt =
     normalizePlayedAt(
       matchEntry.played_at ?? matchEntry.playedAt ?? matchEntry.matchtime ?? matchEntry.time ?? matchEntry.timestamp ?? null
@@ -1117,7 +1232,12 @@ async function fetchNextMatchSharingCode(steamId64, matchToken, knownCode) {
   return sanitizeShareCode(rawCode);
 }
 
-async function fetchHistoricalMatchesByShareCodes(steamId64, matchToken, shareCodeCursor = '') {
+async function fetchHistoricalMatchesByShareCodes(
+  steamId64,
+  matchToken,
+  shareCodeCursor = '',
+  seedShareCode = ''
+) {
   const response = {
     enabled: false,
     fetched_share_codes: 0,
@@ -1127,13 +1247,32 @@ async function fetchHistoricalMatchesByShareCodes(steamId64, matchToken, shareCo
   };
 
   const cleanedMatchToken = sanitizeMatchToken(matchToken);
-  if (!cleanedMatchToken) {
+  const cleanedSeedShareCode = sanitizeShareCode(seedShareCode);
+  if (!cleanedMatchToken && !cleanedSeedShareCode) {
     return response;
   }
   response.enabled = true;
 
+  if (cleanedSeedShareCode) {
+    try {
+      const seededGameMatches = await requestGameByShareCode(cleanedSeedShareCode);
+      const seededNormalized = normalizeGcMatchesForPlayer(seededGameMatches, steamId64);
+      for (let itemIndex = 0; itemIndex < seededNormalized.length; itemIndex += 1) {
+        response.matches.push(seededNormalized[itemIndex]);
+      }
+      response.next_cursor = cleanedSeedShareCode;
+      response.fetched_share_codes += 1;
+    } catch (err) {
+      response.error = err?.message || `Failed to load match by share code ${cleanedSeedShareCode}`;
+      return response;
+    }
+  }
+
+  if (!cleanedMatchToken) {
+    return response;
+  }
+
   if (!STEAM_WEB_API_KEY) {
-    response.error = 'Steam Web API key is not configured (CS2_STATS_STEAM_WEB_API_KEY)';
     return response;
   }
 
@@ -1212,19 +1351,12 @@ function isPremierRanking(entry) {
   return false;
 }
 
-function normalizeMapRankEntry(entry, index) {
+function normalizeMapRankEntry(entry) {
   const rankId = detectRankId(entry?.rank_id ?? entry?.rankId ?? null);
   if (rankId === null) return null;
 
-  const mapName = normalizeText(
-    entry?.map_name ||
-      entry?.mapName ||
-      entry?.map ||
-      entry?.group ||
-      entry?.group_name ||
-      entry?.groupName ||
-      `map_${index + 1}`
-  );
+  const mapName = resolveMapFromRankingEntry(entry);
+  if (!mapName) return null;
   const rankText = normalizeText(entry?.rank || entry?.rank_name || entry?.rankName || '');
   const wins = Math.max(
     parseIntSafe(entry?.wins ?? entry?.wins_count ?? entry?.win_count ?? entry?.winCount ?? 0, 0),
@@ -1255,6 +1387,44 @@ function normalizeMapRankEntry(entry, index) {
     matches,
     win_rate: Number(computedWinRate.toFixed(2)),
   };
+}
+
+function normalizePerMapRankEntries(entry) {
+  const rows = Array.isArray(entry?.per_map_rank)
+    ? entry.per_map_rank
+    : Array.isArray(entry?.perMapRank)
+      ? entry.perMapRank
+      : [];
+  if (!rows.length) return [];
+
+  const normalized = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (!row || typeof row !== 'object') continue;
+
+    const rankId = detectRankId(row.rank_id ?? row.rankId ?? null);
+    if (rankId === null) continue;
+
+    const mapName = resolveMapFromRankingEntry({
+      ...entry,
+      ...row,
+      map_id: row.map_id ?? row.mapId ?? entry?.map_id ?? entry?.mapId ?? null,
+    });
+    if (!mapName) continue;
+
+    const wins = Math.max(parseIntSafe(row.wins ?? row.wins_count ?? row.win_count ?? row.winCount ?? 0, 0), 0);
+    normalized.push({
+      map: mapName,
+      rank_id: rankId,
+      rank: rankName(rankId),
+      wins,
+      losses: 0,
+      matches: wins,
+      win_rate: wins > 0 ? 100 : 0,
+    });
+  }
+
+  return normalized;
 }
 
 function extractRankings(profile) {
@@ -1704,7 +1874,15 @@ function toBackendFormat(profile, recentMatches) {
       continue;
     }
 
-    const normalizedMapRank = normalizeMapRankEntry(entry, index);
+    const perMapRanks = normalizePerMapRankEntries(entry);
+    for (let mapIndex = 0; mapIndex < perMapRanks.length; mapIndex += 1) {
+      const perMap = perMapRanks[mapIndex];
+      const mapKey = normalizeText(perMap?.map || '').toLowerCase();
+      if (!mapKey || mapRanksByName.has(mapKey)) continue;
+      mapRanksByName.set(mapKey, perMap);
+    }
+
+    const normalizedMapRank = normalizeMapRankEntry(entry);
     if (!normalizedMapRank) {
       if (premierRating === null && entryRating !== null && !normalizeText(entry?.map || entry?.map_name)) {
         premierRating = entryRating;
@@ -1762,7 +1940,9 @@ function toBackendFormat(profile, recentMatches) {
     return {
       id: String(matchId),
       played_at: playedAt,
-      map: normalizeText(item.map_name || item.map || item.mapName || ''),
+      map:
+        normalizeMapCode(item.map_name || item.map || item.mapName || '') ||
+        normalizeText(item.map_name || item.map || item.mapName || ''),
       result: normalizeResult(item),
       kills,
       deaths,
@@ -1978,9 +2158,11 @@ app.post('/bot/friends/add', requireToken, async (req, res) => {
 
 app.get('/players/:steamId', requireToken, async (req, res) => {
   const steamId = sanitizeSteamId(req.params.steamId);
-  const matchToken = sanitizeMatchToken(req.query?.match_token || req.headers['x-cs2-match-token'] || '');
+  const rawMatchToken = normalizeText(req.query?.match_token || req.headers['x-cs2-match-token'] || '');
+  const seedShareCode = sanitizeShareCode(rawMatchToken);
+  const matchToken = seedShareCode ? '' : sanitizeMatchToken(rawMatchToken);
   const shareCodeCursor = sanitizeShareCode(req.query?.share_code_cursor || '');
-  const useHistorySync = Boolean(matchToken);
+  const useHistorySync = Boolean(matchToken || seedShareCode);
   if (!/^\d{17}$/.test(steamId)) {
     return res.status(400).json({ error: 'Некорректный SteamID64 (ожидаются 17 цифр)' });
   }
@@ -2013,7 +2195,7 @@ app.get('/players/:steamId', requireToken, async (req, res) => {
       error: '',
     };
     if (useHistorySync) {
-      historySync = await fetchHistoricalMatchesByShareCodes(steamId, matchToken, shareCodeCursor);
+      historySync = await fetchHistoricalMatchesByShareCodes(steamId, matchToken, shareCodeCursor, seedShareCode);
     }
 
     const payload = toBackendFormat(profile, [...recentMatches, ...(historySync.matches || [])]);
@@ -2031,7 +2213,7 @@ app.get('/players/:steamId', requireToken, async (req, res) => {
       payload.history_enabled = false;
       payload.share_code_cursor = '';
       const historyHint =
-        'Для полной истории матчей CS2 укажите match token (steamidkey) в профиле и синхронизируйте снова.';
+        'Для истории CS2 укажите в профиле match token (steamidkey) или вставьте share code матча формата CSGO-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX.';
       payload.note = payload.note ? `${payload.note} ${historyHint}` : historyHint;
     }
 

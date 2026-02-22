@@ -422,3 +422,43 @@ class Cs2StatsFlowTests(APITestCase):
         self.assertEqual(response.data['map_ranks'][0]['wins'], 1)
         self.assertEqual(response.data['map_ranks'][0]['losses'], 1)
         self.assertEqual(response.data['map_ranks'][0]['matches'], 2)
+
+    def test_user_cs2_stats_ignores_placeholder_map_names(self):
+        target = User.objects.create_user(
+            email='target-placeholder@example.com',
+            password='StrongPass123!',
+            nickname='target_placeholder',
+            birth_date=date(1996, 6, 6),
+            initials='TP',
+            is_active=True,
+            is_email_verified=True,
+        )
+        PlayerStats.objects.create(
+            user=target,
+            rank='Master Guardian 1',
+            wins=3,
+            losses=1,
+            total_matches=4,
+            raw_data={
+                'map_ranks': [
+                    {'map': 'map_1', 'rank_id': 11, 'wins': 2},
+                    {'map': 'map_2', 'rank_id': 12, 'wins': 1},
+                ]
+            },
+        )
+        MatchHistory.objects.create(
+            user=target,
+            external_match_id='m-real-map',
+            map_name='de_mirage',
+            result=MatchHistory.RESULT_WIN,
+            kills=19,
+            deaths=14,
+            assists=6,
+        )
+
+        response = self.client.get(f'/api/cs2/users/{target.id}/stats/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        maps = [str(item.get('map') or '') for item in response.data['map_ranks']]
+        self.assertNotIn('map_1', maps)
+        self.assertNotIn('map_2', maps)
+        self.assertIn('de_mirage', maps)

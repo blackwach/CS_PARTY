@@ -52,6 +52,8 @@ const MAP_ALIASES = {
   cache: 'de_cache',
 }
 
+export const CS2_PREMIER_MAP_POOL = ['de_ancient', 'de_anubis', 'de_dust2', 'de_inferno', 'de_mirage', 'de_nuke', 'de_train']
+
 const mapImageCache = new Map()
 const rankBadgeCache = new Map()
 
@@ -68,6 +70,10 @@ function normalizeMapKey(rawMap) {
   if (MAP_ALIASES[withoutPrefix]) return MAP_ALIASES[withoutPrefix]
   if (MAP_META[`de_${withoutPrefix}`]) return `de_${withoutPrefix}`
   return source
+}
+
+export function normalizeCs2MapKey(rawMap) {
+  return normalizeMapKey(rawMap)
 }
 
 function buildDataUrl(svg) {
@@ -159,4 +165,3 @@ export function getCs2MapMeta(rawMap) {
     image: mapImageCache.get(imageKey),
   }
 }
-
