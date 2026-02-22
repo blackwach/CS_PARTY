@@ -75,6 +75,16 @@ const STEAM_EMAIL_IMAP_FETCH_BODY_MAX = parseInt(
   process.env.CS2_STATS_STEAM_EMAIL_IMAP_FETCH_BODY_MAX || '16384',
   10
 );
+// Пауза перед первым опросом почты (письмо с кодом приходит с задержкой 5–30 с)
+const STEAM_EMAIL_INITIAL_WAIT_MS = parseInt(
+  process.env.CS2_STATS_STEAM_EMAIL_INITIAL_WAIT_MS || '18000',
+  10
+);
+// Берём код только из писем не старше N мс (одно письмо на попытку входа — не использовать старый код)
+const STEAM_EMAIL_MAX_AGE_MS = parseInt(
+  process.env.CS2_STATS_STEAM_EMAIL_MAX_AGE_MS || '300000',
+  10
+);
 const STEAM_EMAIL_FROM_FILTER = (process.env.CS2_STATS_STEAM_EMAIL_FROM_FILTER || 'noreply@steampowered.com').trim();
 // "Steam" находит и "Steam Guard", и "Ваш аккаунт Steam: доступ с нового компьютера"
 const STEAM_EMAIL_SUBJECT_FILTER = (process.env.CS2_STATS_STEAM_EMAIL_SUBJECT_FILTER || 'Steam').trim();
@@ -548,6 +558,11 @@ function buildSearchCommands() {
 }
 
 async function fetchSteamGuardCodeFromEmail() {
+  if (STEAM_EMAIL_INITIAL_WAIT_MS > 0) {
+    console.warn(`[steam] ожидание ${Math.round(STEAM_EMAIL_INITIAL_WAIT_MS / 1000)} с перед опросом почты (письмо приходит с задержкой)`);
+    await sleep(STEAM_EMAIL_INITIAL_WAIT_MS);
+  }
+
   const session = await openImapSession();
   const checkedUids = new Set();
 
@@ -595,7 +610,7 @@ async function fetchSteamGuardCodeFromEmail() {
           );
         }
         const messageDate = extractMessageDate(fetchResponse);
-        if (messageDate && Date.now() - messageDate.getTime() > 30 * 60 * 1000) {
+        if (messageDate && Date.now() - messageDate.getTime() > STEAM_EMAIL_MAX_AGE_MS) {
           continue;
         }
         const from = extractMessageFrom(fetchResponse);
@@ -707,7 +722,11 @@ function scheduleReconnect(reason, opts = {}) {
 }
 
 function setLastError(message) {
-  botState.last_error = `[${nowIso()}] ${message}`;
+  let text = message;
+  if (isThrottleError(message)) {
+    text += ' Подождите 5+ минут. Письмо с кодом приходит одно на попытку входа — не нажимайте переподключение.';
+  }
+  botState.last_error = `[${nowIso()}] ${text}`;
 }
 
 function setupSteamHandlers() {
