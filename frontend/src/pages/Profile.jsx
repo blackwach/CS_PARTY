@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { auth as authApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 
-const TELEGRAM_BOT_LINK = (import.meta.env.VITE_TELEGRAM_BOT_LINK || 'https://t.me/cs_party_bot').trim()
+const TELEGRAM_BOT_LINK = (import.meta.env.VITE_TELEGRAM_BOT_LINK || 'https://t.me/blackwach_bot').trim()
 
 export default function Profile() {
   const { user, updateProfile, loadUser } = useAuth()

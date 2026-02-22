@@ -242,6 +242,20 @@ def close_room(room: GameRoom, user: User) -> GameRoom:
     return room
 
 
+@transaction.atomic
+def cleanup_closed_rooms(user: User | None = None) -> int:
+    queryset = GameRoom.objects.filter(status__in=[GameRoom.STATUS_CANCELLED, GameRoom.STATUS_FINISHED])
+    if user is not None:
+        queryset = queryset.filter(memberships__user=user)
+
+    room_ids = list(queryset.values_list('id', flat=True).distinct())
+    if not room_ids:
+        return 0
+
+    deleted_count, _ = GameRoom.objects.filter(id__in=room_ids).delete()
+    return int(deleted_count or 0)
+
+
 def _configure_host_auto_room_server(room: GameRoom) -> None:
     host = (room.server_host or '').strip()
     port = int(room.server_port or 0)

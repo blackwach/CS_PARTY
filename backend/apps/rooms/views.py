@@ -1,9 +1,11 @@
+from django.db.models import Case, IntegerField, Value, When
 from rest_framework import mixins, permissions, response, status, viewsets
 from rest_framework.decorators import action
 
 from .models import GameRoom
 from .serializers import RoomCreateSerializer, RoomSerializer
 from .services import (
+    cleanup_closed_rooms,
     close_room,
     create_room_with_invites,
     decline_room,
@@ -24,12 +26,29 @@ class RoomViewSet(
     lookup_field = 'code'
 
     def get_queryset(self):
-        return (
+        base_queryset = (
             GameRoom.objects.filter(memberships__user=self.request.user)
             .select_related('host')
             .prefetch_related('memberships__user')
             .distinct()
-            .order_by('scheduled_for')
+        )
+
+        if getattr(self, 'action', '') != 'list':
+            return base_queryset.order_by('scheduled_for', '-created_at')
+
+        cleanup_closed_rooms(self.request.user)
+        return (
+            base_queryset.filter(status__in=[GameRoom.STATUS_OPEN, GameRoom.STATUS_READY, GameRoom.STATUS_STARTED])
+            .annotate(
+                status_sort=Case(
+                    When(status=GameRoom.STATUS_STARTED, then=Value(0)),
+                    When(status=GameRoom.STATUS_READY, then=Value(1)),
+                    When(status=GameRoom.STATUS_OPEN, then=Value(2)),
+                    default=Value(99),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by('status_sort', 'scheduled_for', '-created_at')
         )
 
     def create(self, request, *args, **kwargs):

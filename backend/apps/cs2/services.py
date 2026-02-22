@@ -1,4 +1,5 @@
 from datetime import datetime
+import hashlib
 import re
 import xml.etree.ElementTree as ET
 
@@ -173,6 +174,34 @@ def _normalize_match_result(raw_result: str) -> str:
     return MatchHistory.RESULT_DRAW
 
 
+def _to_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _extract_match_id(item: dict, fallback_index: int) -> str:
+    direct = str(item.get('id') or item.get('match_id') or item.get('matchId') or '').strip()
+    if direct:
+        return direct
+
+    key = '|'.join(
+        [
+            str(item.get('played_at') or item.get('playedAt') or item.get('time') or item.get('timestamp') or '').strip(),
+            str(item.get('map') or item.get('map_name') or '').strip(),
+            str(item.get('kills') or 0),
+            str(item.get('deaths') or 0),
+            str(item.get('assists') or 0),
+            str(item.get('result') or '').strip().lower(),
+        ]
+    )
+    if not key.replace('|', '').strip():
+        return f'match_{fallback_index}'
+    digest = hashlib.sha1(key.encode('utf-8')).hexdigest()[:16]
+    return f'match_{digest}'
+
+
 def _sync_from_public_profile(steam_id: str) -> dict:
     xml_url = f'https://steamcommunity.com/profiles/{steam_id}/?xml=1'
     try:
@@ -300,29 +329,41 @@ def sync_cs2_stats_for_user(user):
     if not matches:
         # In public-profile mode we have no reliable match history.
         MatchHistory.objects.filter(user=user).delete()
+    else:
+        seen_ids: set[str] = set()
+        synced_match_ids: list[str] = []
 
-    for item in matches:
-        if not isinstance(item, dict):
-            continue
-        match_id = str(item.get('id') or item.get('match_id') or item.get('matchId') or '').strip()
-        if not match_id:
-            continue
+        for index, item in enumerate(matches):
+            if not isinstance(item, dict):
+                continue
 
-        result = _normalize_match_result(str(item.get('result', '')))
-        MatchHistory.objects.update_or_create(
-            user=user,
-            external_match_id=match_id,
-            defaults={
-                'played_at': _parse_datetime(item.get('played_at') or item.get('playedAt')),
-                'map_name': item.get('map', '') or item.get('map_name', '') or '',
-                'result': result,
-                'kills': int(item.get('kills', 0) or 0),
-                'deaths': int(item.get('deaths', 0) or 0),
-                'assists': int(item.get('assists', 0) or 0),
-                'rank_at_match': item.get('rank', '') or item.get('rank_at_match', '') or '',
-                'raw_data': item,
-            },
-        )
+            match_id = _extract_match_id(item, index)
+            if not match_id or match_id in seen_ids:
+                continue
+            seen_ids.add(match_id)
+            synced_match_ids.append(match_id)
+
+            result = _normalize_match_result(str(item.get('result', '')))
+            MatchHistory.objects.update_or_create(
+                user=user,
+                external_match_id=match_id,
+                defaults={
+                    'played_at': _parse_datetime(item.get('played_at') or item.get('playedAt')),
+                    'map_name': str(item.get('map', '') or item.get('map_name', '') or '').strip(),
+                    'result': result,
+                    'kills': max(_to_int(item.get('kills', 0), 0), 0),
+                    'deaths': max(_to_int(item.get('deaths', 0), 0), 0),
+                    'assists': max(_to_int(item.get('assists', 0), 0), 0),
+                    'rank_at_match': str(item.get('rank', '') or item.get('rank_at_match', '') or '').strip(),
+                    'raw_data': item,
+                },
+            )
+
+        # Keep only current provider snapshot to avoid stale/inflated aggregates.
+        if synced_match_ids:
+            MatchHistory.objects.filter(user=user).exclude(external_match_id__in=synced_match_ids).delete()
+        else:
+            MatchHistory.objects.filter(user=user).delete()
 
     return stats
 

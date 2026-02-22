@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
+from apps.cs2.models import MatchHistory, PlayerStats
 
 
 class Cs2StatsFlowTests(APITestCase):
@@ -157,3 +158,126 @@ class Cs2StatsFlowTests(APITestCase):
 
         allowed_response = self.client.get('/api/cs2/health/')
         self.assertEqual(allowed_response.status_code, status.HTTP_200_OK)
+
+    @override_settings(CS2_STATS_API_URL='https://cs2-stats.example')
+    @patch('apps.cs2.services.requests.get')
+    def test_sync_deduplicates_matches_and_replaces_outdated_history(self, mock_get):
+        provider_response = Mock()
+        provider_response.raise_for_status.return_value = None
+        provider_response.json.side_effect = [
+            {
+                'rank': 'Gold Nova 1',
+                'wins': 2,
+                'losses': 1,
+                'total_matches': 3,
+                'matches': [
+                    {
+                        'id': 'm-fixed',
+                        'played_at': '2026-02-21T10:00:00Z',
+                        'map': 'de_mirage',
+                        'result': 'win',
+                        'kills': 21,
+                        'deaths': 13,
+                        'assists': 6,
+                    },
+                    {
+                        'id': 'm-fixed',
+                        'played_at': '2026-02-21T10:00:00Z',
+                        'map': 'de_mirage',
+                        'result': 'win',
+                        'kills': 21,
+                        'deaths': 13,
+                        'assists': 6,
+                    },
+                    {
+                        'played_at': '2026-02-20T18:00:00Z',
+                        'map': 'de_nuke',
+                        'result': 'lose',
+                        'kills': 9,
+                        'deaths': 17,
+                        'assists': 3,
+                    },
+                    {
+                        'played_at': '2026-02-20T18:00:00Z',
+                        'map': 'de_nuke',
+                        'result': 'lose',
+                        'kills': 9,
+                        'deaths': 17,
+                        'assists': 3,
+                    },
+                ],
+            },
+            {
+                'rank': 'Gold Nova 2',
+                'wins': 4,
+                'losses': 1,
+                'total_matches': 5,
+                'matches': [
+                    {
+                        'id': 'new-only',
+                        'played_at': '2026-02-22T09:00:00Z',
+                        'map': 'de_inferno',
+                        'result': 'win',
+                        'kills': 24,
+                        'deaths': 14,
+                        'assists': 5,
+                    }
+                ],
+            },
+        ]
+        mock_get.return_value = provider_response
+
+        self.client.patch(
+            '/api/auth/me/',
+            {'steam_profile_url': 'https://steamcommunity.com/profiles/76561198012345678'},
+            format='json',
+        )
+
+        first_sync = self.client.post('/api/cs2/me/sync/', {}, format='json')
+        self.assertEqual(first_sync.status_code, status.HTTP_200_OK)
+        self.assertEqual(MatchHistory.objects.filter(user=self.user).count(), 2)
+
+        second_sync = self.client.post('/api/cs2/me/sync/', {}, format='json')
+        self.assertEqual(second_sync.status_code, status.HTTP_200_OK)
+        self.assertEqual(MatchHistory.objects.filter(user=self.user).count(), 1)
+        self.assertTrue(MatchHistory.objects.filter(user=self.user, external_match_id='new-only').exists())
+
+    def test_user_cs2_stats_endpoint_returns_other_user_stats(self):
+        target = User.objects.create_user(
+            email='target@example.com',
+            password='StrongPass123!',
+            nickname='target_player',
+            birth_date=date(1998, 4, 10),
+            initials='TP',
+            is_active=True,
+            is_email_verified=True,
+        )
+        stats = PlayerStats.objects.create(
+            user=target,
+            rank='Master Guardian 1',
+            wins=10,
+            losses=8,
+            total_matches=18,
+            raw_data={
+                'rank_id': 11,
+                'premier_rating': 12345,
+                'map_ranks': [{'map': 'de_mirage', 'rank_id': 11, 'rank': 'Master Guardian 1'}],
+            },
+        )
+        MatchHistory.objects.create(
+            user=target,
+            external_match_id='m-target-1',
+            map_name='de_mirage',
+            kills=20,
+            deaths=15,
+            assists=7,
+            rank_at_match='Master Guardian 1',
+            raw_data={'headshots': 10},
+        )
+
+        response = self.client.get(f'/api/cs2/users/{target.id}/stats/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['rank'], stats.rank)
+        self.assertEqual(response.data['premier_rating'], 12345)
+        self.assertEqual(len(response.data['map_ranks']), 1)
+        self.assertEqual(len(response.data['recent_matches']), 1)

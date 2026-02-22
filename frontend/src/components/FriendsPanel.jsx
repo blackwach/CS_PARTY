@@ -2,9 +2,35 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { auth as authApi } from '../api'
 
+const SEARCH_HINTS_KEY = 'friends_search_hints_v1'
+const MAX_HINTS = 6
+
 function formatLastSeen(value) {
   if (!value) return ''
   return `Был(а) ${new Date(value).toLocaleString('ru-RU')}`
+}
+
+function readStoredHints() {
+  if (typeof window === 'undefined') return []
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SEARCH_HINTS_KEY) || '[]')
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .slice(0, MAX_HINTS)
+  } catch {
+    return []
+  }
+}
+
+function writeStoredHints(hints) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(SEARCH_HINTS_KEY, JSON.stringify(hints.slice(0, MAX_HINTS)))
+  } catch {
+    // ignore
+  }
 }
 
 export default function FriendsPanel({ isVisible, onClose }) {
@@ -18,6 +44,7 @@ export default function FriendsPanel({ isVisible, onClose }) {
   const [hasSearched, setHasSearched] = useState(false)
   const [requestState, setRequestState] = useState({})
   const [incomingActionState, setIncomingActionState] = useState({})
+  const [searchHints, setSearchHints] = useState(readStoredHints)
   const navigate = useNavigate()
 
   const loadFriendsData = useCallback(() => {
@@ -40,9 +67,24 @@ export default function FriendsPanel({ isVisible, onClose }) {
   }, [loadFriendsData])
 
   const onlineFriendsCount = useMemo(() => friends.filter((item) => item.friend?.is_online).length, [friends])
+  const filteredHints = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return searchHints
+    return searchHints.filter((item) => item.toLowerCase().includes(query))
+  }, [search, searchHints])
 
-  const searchUsers = async () => {
-    const query = search.trim()
+  const rememberSearchHint = (query) => {
+    const clean = String(query || '').trim()
+    if (!clean) return
+    setSearchHints((prev) => {
+      const next = [clean, ...prev.filter((item) => item.toLowerCase() !== clean.toLowerCase())].slice(0, MAX_HINTS)
+      writeStoredHints(next)
+      return next
+    })
+  }
+
+  const runSearch = async (rawValue = search) => {
+    const query = String(rawValue || '').trim()
     setHasSearched(true)
     if (!query) {
       setSearchResults([])
@@ -52,6 +94,7 @@ export default function FriendsPanel({ isVisible, onClose }) {
 
     setSearching(true)
     setSearchError('')
+    rememberSearchHint(query)
     try {
       const { data } = await authApi.usersSearch(query)
       const allResults = Array.isArray(data) ? data : data?.results || []
@@ -105,18 +148,56 @@ export default function FriendsPanel({ isVisible, onClose }) {
       </div>
 
       <div className="friends-search-box">
-        <div className="friends-search-bar">
+        <div className="friends-search-field">
+          <span className="friends-search-icon" aria-hidden="true">⌕</span>
           <input
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => event.key === 'Enter' && (event.preventDefault(), searchUsers())}
-            placeholder="Найти игрока по нику"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                runSearch()
+              }
+            }}
+            placeholder="Поиск друзей: ник, email"
           />
-          <button type="button" className="btn btn-secondary" onClick={searchUsers} disabled={searching}>
+          {search && (
+            <button
+              type="button"
+              className="friends-search-clear"
+              onClick={() => {
+                setSearch('')
+                setSearchError('')
+              }}
+              aria-label="Очистить поиск"
+            >
+              ×
+            </button>
+          )}
+        </div>
+        <div className="friends-search-bar">
+          <button type="button" className="btn btn-secondary" onClick={() => runSearch()} disabled={searching}>
             {searching ? 'Поиск...' : 'Найти'}
           </button>
         </div>
+        {filteredHints.length > 0 && (
+          <div className="friends-search-hints">
+            {filteredHints.map((hint) => (
+              <button
+                key={hint}
+                type="button"
+                className="friends-search-hint-btn"
+                onClick={() => {
+                  setSearch(hint)
+                  runSearch(hint)
+                }}
+              >
+                {hint}
+              </button>
+            ))}
+          </div>
+        )}
         {searchError && <p className="form-error">{searchError}</p>}
         {searchResults.length > 0 && (
           <ul className="friends-search-results">

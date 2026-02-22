@@ -678,6 +678,151 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function normalizeText(value) {
+  return String(value || '').trim();
+}
+
+function normalizeModeName(value) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ');
+}
+
+function hashString(value) {
+  const source = String(value || '');
+  let hash = 2166136261;
+  for (let i = 0; i < source.length; i += 1) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function normalizePlayedAt(value) {
+  if (value === null || value === undefined || value === '') return '';
+
+  if (typeof value === 'number') {
+    const timeMs = value > 1e12 ? value : value * 1000;
+    return new Date(timeMs).toISOString();
+  }
+
+  if (value && typeof value.toISOString === 'function') {
+    try {
+      return value.toISOString();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  const asText = normalizeText(value);
+  if (!asText) return '';
+
+  const parsedTime = Date.parse(asText);
+  if (Number.isNaN(parsedTime)) return asText;
+  return new Date(parsedTime).toISOString();
+}
+
+function buildStableMatchId(item) {
+  const direct =
+    normalizeText(item?.matchid) ||
+    normalizeText(item?.match_id) ||
+    normalizeText(item?.matchId) ||
+    normalizeText(item?.id);
+  if (direct) return direct;
+
+  const keyParts = [
+    normalizePlayedAt(item?.played_at ?? item?.time ?? item?.timestamp ?? null),
+    normalizeText(item?.map_name || item?.map || ''),
+    String(parseIntSafe(item?.kills ?? item?.kills_count ?? 0, 0)),
+    String(parseIntSafe(item?.deaths ?? item?.deaths_count ?? 0, 0)),
+    String(parseIntSafe(item?.assists ?? item?.assists_count ?? 0, 0)),
+    normalizeText(item?.result ?? item?.win ?? ''),
+  ];
+  return `match_${hashString(keyParts.join('|'))}`;
+}
+
+function normalizeResult(item) {
+  const rawResult = normalizeText(item?.result).toLowerCase();
+  if (item?.win === true || rawResult === 'win' || rawResult === 'won' || rawResult === 'victory') {
+    return 'win';
+  }
+  if (
+    item?.win === false ||
+    rawResult === 'lose' ||
+    rawResult === 'loss' ||
+    rawResult === 'lost' ||
+    rawResult === 'defeat'
+  ) {
+    return 'lose';
+  }
+  return 'draw';
+}
+
+function extractPremierRating(value) {
+  const parsed = parseIntSafe(value, NaN);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function extractPremierRatingFromObject(source) {
+  if (!source || typeof source !== 'object') return null;
+  return (
+    extractPremierRating(source.premier_rating) ??
+    extractPremierRating(source.premierRating) ??
+    extractPremierRating(source.rating) ??
+    extractPremierRating(source.elo) ??
+    extractPremierRating(source.mmr) ??
+    null
+  );
+}
+
+function isPremierRanking(entry) {
+  if (!entry || typeof entry !== 'object') return false;
+  const modeText = normalizeModeName(
+    entry.mode ||
+      entry.mode_name ||
+      entry.modeName ||
+      entry.rank_type ||
+      entry.rank_type_name ||
+      entry.rankType ||
+      entry.rankTypeName ||
+      entry.name ||
+      ''
+  );
+  if (modeText.includes('premier')) return true;
+  if (entry.is_premier === true || entry.premier === true) return true;
+  return false;
+}
+
+function normalizeMapRankEntry(entry, index) {
+  const rankId = detectRankId(entry?.rank_id ?? entry?.rankId ?? null);
+  if (rankId === null) return null;
+
+  const mapName = normalizeText(
+    entry?.map_name ||
+      entry?.mapName ||
+      entry?.map ||
+      entry?.group ||
+      entry?.group_name ||
+      entry?.groupName ||
+      `map_${index + 1}`
+  );
+  const rankText = normalizeText(entry?.rank || entry?.rank_name || entry?.rankName || '');
+  return {
+    map: mapName,
+    rank_id: rankId,
+    rank: rankText || rankName(rankId),
+  };
+}
+
+function extractRankings(profile) {
+  if (!profile || typeof profile !== 'object') return [];
+  if (Array.isArray(profile.rankings)) return profile.rankings;
+  if (Array.isArray(profile.ranking)) return profile.ranking;
+  if (profile.ranking && typeof profile.ranking === 'object') return [profile.ranking];
+  return [];
+}
+
 function getSteamGuardPendingStatus() {
   if (!pendingSteamGuard) return null;
   return {
@@ -1082,17 +1227,69 @@ function addFriendBySteamId(steamId64) {
 }
 
 function toBackendFormat(profile, recentMatches) {
-  const mainRank = profile && (profile.ranking || (profile.rankings && profile.rankings[0]));
-  const rawRankId = mainRank && (mainRank.rank_id != null ? mainRank.rank_id : profile.rank_id);
-  const rankId = detectRankId(rawRankId);
-  const wins =
-    ((mainRank && (mainRank.wins != null ? mainRank.wins : profile.wins)) || profile?.wins || 0);
+  const rankings = extractRankings(profile);
+  const rawProfileRankId = detectRankId(profile?.rank_id ?? profile?.rankId ?? null);
+  const mapRanksByName = new Map();
 
-  const matches = (recentMatches || []).map((item, index) => {
-    const matchId = item.matchid || item.match_id || item.matchId || `match_${index}_${Date.now()}`;
-    let playedAt = item.played_at || item.time || item.timestamp || null;
-    if (typeof playedAt === 'number') playedAt = new Date(playedAt * 1000).toISOString();
-    if (playedAt && typeof playedAt.toISOString === 'function') playedAt = playedAt.toISOString();
+  let premierRating =
+    extractPremierRatingFromObject(profile?.premier) ??
+    extractPremierRatingFromObject(profile?.cs_rating) ??
+    extractPremierRatingFromObject(profile);
+  let premierRankId = detectRankId(
+    profile?.premier_rank_id ?? profile?.premierRankId ?? profile?.premier_rank ?? null
+  );
+  let premierRankText = normalizeText(profile?.premier_rank_name || profile?.premierRankName || '');
+
+  for (let index = 0; index < rankings.length; index += 1) {
+    const entry = rankings[index];
+    const isPremier = isPremierRanking(entry);
+    const entryRankId = detectRankId(entry?.rank_id ?? entry?.rankId ?? null);
+    const entryRankText = normalizeText(entry?.rank || entry?.rank_name || entry?.rankName || '');
+    const entryRating = extractPremierRatingFromObject(entry);
+
+    if (isPremier) {
+      if (premierRating === null && entryRating !== null) {
+        premierRating = entryRating;
+      }
+      if (premierRankId === null && entryRankId !== null) {
+        premierRankId = entryRankId;
+      }
+      if (!premierRankText && entryRankText) {
+        premierRankText = entryRankText;
+      }
+      continue;
+    }
+
+    const normalizedMapRank = normalizeMapRankEntry(entry, index);
+    if (!normalizedMapRank) {
+      if (premierRating === null && entryRating !== null && !normalizeText(entry?.map || entry?.map_name)) {
+        premierRating = entryRating;
+      }
+      continue;
+    }
+
+    const mapKey = normalizedMapRank.map.toLowerCase();
+    if (!mapRanksByName.has(mapKey)) {
+      mapRanksByName.set(mapKey, normalizedMapRank);
+    }
+  }
+
+  const mapRanks = [...mapRanksByName.values()].sort((left, right) => left.map.localeCompare(right.map));
+  if (premierRankId !== null && !premierRankText) {
+    premierRankText = rankName(premierRankId);
+  }
+
+  const mainRank = mapRanks[0] || null;
+  const resolvedRankId = mainRank?.rank_id ?? premierRankId ?? rawProfileRankId ?? null;
+  const resolvedRankName = normalizeText(mainRank?.rank || '') || rankName(resolvedRankId);
+
+  const firstRanking = rankings[0] || null;
+  const wins = parseIntSafe(profile?.wins ?? firstRanking?.wins ?? 0, 0);
+  const losses = parseIntSafe(profile?.losses ?? firstRanking?.losses ?? 0, 0);
+
+  const mappedMatches = (recentMatches || []).map((item) => {
+    const matchId = buildStableMatchId(item);
+    const playedAt = normalizePlayedAt(item.played_at ?? item.time ?? item.timestamp ?? null) || null;
 
     const kills = parseIntSafe(item.kills || item.kills_count || 0, 0);
     const deaths = parseIntSafe(item.deaths || item.deaths_count || 0, 0);
@@ -1121,34 +1318,43 @@ function toBackendFormat(profile, recentMatches) {
           ? clamp((safeHeadshots / kills) * 100, 0, 100)
           : 0;
 
-    const matchRankId = detectRankId(item.rank_id != null ? item.rank_id : rawRankId);
+    const matchRankId = detectRankId(item.rank_id ?? item.rankId ?? resolvedRankId);
+    const matchRankText = normalizeText(item.rank || item.rank_name || item.rankName || '') || rankName(matchRankId);
 
     return {
       id: String(matchId),
-      played_at: playedAt || null,
-      map: item.map_name || item.map || '',
-      result:
-        item.win === true || item.result === 'win'
-          ? 'win'
-          : item.win === false || item.result === 'lose'
-            ? 'lose'
-            : 'draw',
+      played_at: playedAt,
+      map: normalizeText(item.map_name || item.map || ''),
+      result: normalizeResult(item),
       kills,
       deaths,
       assists,
       headshots: safeHeadshots,
       headshot_percent: Number(computedHeadshotPercent.toFixed(2)),
       rank_id: matchRankId,
-      rank: rankName(matchRankId),
+      rank: matchRankText,
     };
   });
 
-  const losses = typeof profile?.losses === 'number' ? profile.losses : 0;
-  const totalMatches = matches.length > 0 ? (wins + losses) || matches.length : wins + losses;
+  const seenMatchIds = new Set();
+  const matches = mappedMatches.filter((item) => {
+    if (!item?.id) return false;
+    if (seenMatchIds.has(item.id)) return false;
+    seenMatchIds.add(item.id);
+    return true;
+  });
+
+  const totalMatches =
+    parseIntSafe(profile?.total_matches ?? profile?.totalMatches ?? 0, 0) ||
+    (matches.length > 0 ? Math.max(wins + losses, matches.length) : wins + losses);
 
   return {
-    rank_id: rankId,
-    rank: rankName(rankId),
+    rank_id: resolvedRankId,
+    rank: resolvedRankName,
+    premier_rating: premierRating,
+    premier_rank_id: premierRankId,
+    premier_rank: premierRankText || null,
+    map_ranks: mapRanks,
     wins,
     losses,
     total_matches: totalMatches || wins + losses,

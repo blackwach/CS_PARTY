@@ -32,12 +32,12 @@ class RoomInviteNotificationTests(APITestCase):
         )
         self.client.force_authenticate(user=self.host)
 
-    def _create_room(self):
+    def _create_room(self, *, title='Evening match', hours_from_now=1):
         response = self.client.post(
             '/api/rooms/',
             {
-                'title': 'Evening match',
-                'scheduled_for': (timezone.now() + timedelta(hours=1)).isoformat(),
+                'title': title,
+                'scheduled_for': (timezone.now() + timedelta(hours=hours_from_now)).isoformat(),
                 'invited_user_ids': [self.guest.id],
             },
             format='json',
@@ -143,6 +143,31 @@ class RoomInviteNotificationTests(APITestCase):
         response = self.client.post(f"/api/rooms/{room['code']}/close/", {}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], 'cancelled')
+
+    def test_room_list_sorts_active_rooms_and_removes_closed(self):
+        open_room = self._create_room(title='Open room', hours_from_now=3)
+        started_room = self._create_room(title='Started room', hours_from_now=1)
+        closed_room = self._create_room(title='Closed room', hours_from_now=2)
+
+        host_ready = self.client.post(f"/api/rooms/{started_room['code']}/ready/", {}, format='json')
+        self.assertEqual(host_ready.status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=self.guest)
+        join_response = self.client.post(f"/api/rooms/{started_room['code']}/join/", {}, format='json')
+        self.assertEqual(join_response.status_code, status.HTTP_200_OK)
+        guest_ready = self.client.post(f"/api/rooms/{started_room['code']}/ready/", {}, format='json')
+        self.assertEqual(guest_ready.status_code, status.HTTP_200_OK)
+        self.assertIn(guest_ready.data['status'], {'ready', 'started'})
+
+        self.client.force_authenticate(user=self.host)
+        close_response = self.client.post(f"/api/rooms/{closed_room['code']}/close/", {}, format='json')
+        self.assertEqual(close_response.status_code, status.HTTP_200_OK)
+
+        list_response = self.client.get('/api/rooms/')
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        listed_codes = [item['code'] for item in list_response.data]
+        self.assertEqual(listed_codes, [started_room['code'], open_room['code']])
+        self.assertFalse(self.host.hosted_rooms.filter(code=closed_room['code']).exists())
 
     def test_non_host_cannot_close_room(self):
         room = self._create_room()

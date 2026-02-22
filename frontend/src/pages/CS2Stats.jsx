@@ -115,6 +115,8 @@ export default function CS2Stats() {
   const averages = stats?.averages || {}
   const rankId = Number.isInteger(stats?.rank_id) ? stats.rank_id : null
   const rankName = stats?.rank || 'Без ранга'
+  const premierRating = Number.isFinite(Number(stats?.premier_rating)) ? Number(stats.premier_rating) : null
+  const mapRanks = Array.isArray(stats?.map_ranks) ? stats.map_ranks : []
   const rankBadge = useMemo(() => getRankBadgeDataUrl(rankId, rankName), [rankId, rankName])
   const isBotAdmin = String(user?.email || '').trim().toLowerCase() === CS2_BOT_ADMIN_EMAIL
 
@@ -193,6 +195,10 @@ export default function CS2Stats() {
                 <div className="stat-label">Поражений</div>
               </div>
               <div className="stat-box">
+                <div className="stat-value">{premierRating ?? '-'}</div>
+                <div className="stat-label">Рейтинг Premier</div>
+              </div>
+              <div className="stat-box">
                 <div className="stat-value">{stats.total_matches ?? '-'}</div>
                 <div className="stat-label">Матчей</div>
               </div>
@@ -219,6 +225,20 @@ export default function CS2Stats() {
               Обновлено: {formatDate(stats.last_synced_at)} | Источник: {stats.source || 'неизвестно'}
             </p>
           </section>
+
+          {mapRanks.length > 0 && (
+            <section className="panel">
+              <h2>Ранги по картам</h2>
+              <ul className="cs2-map-ranks-list">
+                {mapRanks.map((item, index) => (
+                  <li key={`${item.map || 'map'}-${index}`} className="cs2-map-rank-item">
+                    <span className="cs2-map-rank-map">{item.map || 'Карта'}</span>
+                    <span className="badge badge-open">{item.rank || `Ранг ${item.rank_id ?? '-'}`}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {stats.recent_matches?.length > 0 && (
             <section className="panel">

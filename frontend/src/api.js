@@ -92,6 +92,7 @@ export const rooms = {
 
 export const cs2 = {
   getStats: () => api.get('/api/cs2/me/stats/'),
+  getUserStats: (userId) => api.get(`/api/cs2/users/${userId}/stats/`),
   sync: () => api.post('/api/cs2/me/sync/', {}),
   health: () => api.get('/api/cs2/health/'),
   addFriendByInvite: (invite_link) => api.post('/api/cs2/friends/add/', { invite_link }),

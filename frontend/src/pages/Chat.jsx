@@ -16,6 +16,10 @@ function toEpoch(value) {
   return Number.isNaN(parsed) ? 0 : parsed
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
 function sortMessages(items) {
   return [...items].sort((left, right) => {
     const byTime = toEpoch(left?.created_at) - toEpoch(right?.created_at)
@@ -71,7 +75,7 @@ function mergeWithServerState(prev, serverItems) {
 
 function formatLastSeen(value) {
   if (!value) return 'Был(а) давно'
-  return `Был(а) ${new Date(value).toLocaleString()}`
+  return `Был(а) ${new Date(value).toLocaleString('ru-RU')}`
 }
 
 export default function Chat() {
@@ -87,11 +91,14 @@ export default function Chat() {
   const [wsConnected, setWsConnected] = useState(false)
   const [hasUnreadBelow, setHasUnreadBelow] = useState(false)
   const [peerTyping, setPeerTyping] = useState(false)
+  const [scrollProgress, setScrollProgress] = useState(1)
+  const [scrollViewportRatio, setScrollViewportRatio] = useState(1)
 
   const socketRef = useRef(null)
   const reconnectTimerRef = useRef(null)
   const reconnectAttemptsRef = useRef(0)
   const messagesWrapRef = useRef(null)
+  const scrollRailRef = useRef(null)
   const stickToBottomRef = useRef(true)
   const forceScrollRef = useRef(true)
   const prevMessageCountRef = useRef(0)
@@ -102,6 +109,34 @@ export default function Chat() {
   const canChat = peer?.can_chat === true
   const peerId = Number(userId)
   const peerInitial = String(peer?.nickname || '?').slice(0, 1).toUpperCase()
+  const canUseCustomScroll = scrollViewportRatio < 0.999
+  const thumbHeightPercent = Math.max(scrollViewportRatio * 100, 10)
+  const thumbTopPercent = (100 - thumbHeightPercent) * scrollProgress
+
+  const updateScrollMetrics = useCallback((container) => {
+    if (!container) return
+    const maxScrollable = Math.max(container.scrollHeight - container.clientHeight, 0)
+    if (maxScrollable <= 0) {
+      setScrollProgress(1)
+      setScrollViewportRatio(1)
+      return
+    }
+    setScrollViewportRatio(clamp(container.clientHeight / container.scrollHeight, 0.08, 1))
+    setScrollProgress(clamp(container.scrollTop / maxScrollable, 0, 1))
+  }, [])
+
+  const setScrollByProgress = useCallback((progress) => {
+    const container = messagesWrapRef.current
+    if (!container) return
+    const maxScrollable = Math.max(container.scrollHeight - container.clientHeight, 0)
+    if (maxScrollable <= 0) return
+    const normalized = clamp(progress, 0, 1)
+    container.scrollTop = maxScrollable * normalized
+    forceScrollRef.current = false
+    stickToBottomRef.current = normalized > 0.98
+    if (normalized > 0.98) setHasUnreadBelow(false)
+    updateScrollMetrics(container)
+  }, [updateScrollMetrics])
 
   const loadPeerPresence = useCallback(async () => {
     try {
@@ -138,14 +173,11 @@ export default function Chat() {
     [canChat, userId]
   )
 
-  const emitTyping = useCallback(
-    (isTyping) => {
-      const ws = socketRef.current
-      if (!ws || ws.readyState !== WebSocket.OPEN) return
-      ws.send(JSON.stringify({ type: isTyping ? 'typing.start' : 'typing.stop' }))
-    },
-    []
-  )
+  const emitTyping = useCallback((isTyping) => {
+    const ws = socketRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    ws.send(JSON.stringify({ type: isTyping ? 'typing.start' : 'typing.stop' }))
+  }, [])
 
   const stopTypingSignal = useCallback(() => {
     if (typingStopTimerRef.current) {
@@ -345,12 +377,13 @@ export default function Chat() {
       const isAtBottom = distanceToBottom <= SCROLL_BOTTOM_EPSILON
       stickToBottomRef.current = isAtBottom
       if (isAtBottom) setHasUnreadBelow(false)
+      updateScrollMetrics(container)
     }
 
     updateStickyState()
     container.addEventListener('scroll', updateStickyState, { passive: true })
     return () => container.removeEventListener('scroll', updateStickyState)
-  }, [loading])
+  }, [loading, updateScrollMetrics])
 
   useEffect(() => {
     const container = messagesWrapRef.current
@@ -370,7 +403,8 @@ export default function Chat() {
 
     prevMessageCountRef.current = messages.length
     forceScrollRef.current = false
-  }, [messages, user?.id])
+    updateScrollMetrics(container)
+  }, [messages, user?.id, updateScrollMetrics])
 
   const scrollToBottom = () => {
     const container = messagesWrapRef.current
@@ -379,6 +413,70 @@ export default function Chat() {
     stickToBottomRef.current = true
     forceScrollRef.current = false
     setHasUnreadBelow(false)
+    updateScrollMetrics(container)
+  }
+
+  const scrollToTop = () => {
+    const container = messagesWrapRef.current
+    if (!container) return
+    container.scrollTop = 0
+    stickToBottomRef.current = false
+    forceScrollRef.current = false
+    updateScrollMetrics(container)
+  }
+
+  const scrollByPage = (direction) => {
+    const container = messagesWrapRef.current
+    if (!container) return
+    const pageSize = Math.max(container.clientHeight * 0.82, 120)
+    const nextTop = container.scrollTop + pageSize * Number(direction || 0)
+    container.scrollTop = clamp(nextTop, 0, Math.max(container.scrollHeight - container.clientHeight, 0))
+    forceScrollRef.current = false
+    stickToBottomRef.current = container.scrollHeight - container.scrollTop - container.clientHeight <= SCROLL_BOTTOM_EPSILON
+    updateScrollMetrics(container)
+  }
+
+  const handleScrollRailPointerDown = (event) => {
+    if (!canUseCustomScroll) return
+    const rail = scrollRailRef.current
+    if (!rail) return
+
+    const getClientY = (evt) => {
+      if (typeof evt.clientY === 'number') return evt.clientY
+      if (evt.touches?.[0] && typeof evt.touches[0].clientY === 'number') return evt.touches[0].clientY
+      if (evt.changedTouches?.[0] && typeof evt.changedTouches[0].clientY === 'number') return evt.changedTouches[0].clientY
+      return null
+    }
+
+    const applyClientY = (clientY) => {
+      const rect = rail.getBoundingClientRect()
+      if (rect.height <= 0) return
+      const relativeY = clamp(clientY - rect.top, 0, rect.height)
+      setScrollByProgress(relativeY / rect.height)
+    }
+
+    const onMove = (evt) => {
+      const clientY = getClientY(evt)
+      if (clientY === null) return
+      evt.preventDefault()
+      applyClientY(clientY)
+    }
+
+    const onEnd = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onEnd)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
+    }
+
+    const initialY = getClientY(event)
+    if (initialY === null) return
+    applyClientY(initialY)
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onEnd)
+    window.addEventListener('touchmove', onMove, { passive: false })
+    window.addEventListener('touchend', onEnd)
   }
 
   const markMessageFailed = (localId, detail = '') => {
@@ -522,40 +620,71 @@ export default function Chat() {
 
       <div className="panel chat-panel chat-panel-updated">
         <div className="chat-messages-wrap">
-          <div className="chat-messages" ref={messagesWrapRef}>
-            {messages.length === 0 && <div className="chat-empty">Пока нет сообщений. Напишите первым.</div>}
+          <div className="chat-messages-layout">
+            <div className="chat-messages" ref={messagesWrapRef}>
+              {messages.length === 0 && <div className="chat-empty">Пока нет сообщений. Напишите первым.</div>}
 
-            {messages.map((message) => {
-              const mine = user && message.sender?.id === user.id
-              return (
-                <div key={String(message.id)} className={`chat-row ${mine ? 'is-mine' : ''}`}>
-                  <div className={`chat-bubble ${mine ? 'is-mine' : ''} ${message.pending ? 'is-pending' : ''} ${message.failed ? 'is-failed' : ''}`}>
-                    <div className="chat-bubble-head">
-                      <strong>{mine ? 'Вы' : message.sender?.nickname}</strong>
-                      <span>{new Date(message.created_at).toLocaleString()}</span>
+              {messages.map((message) => {
+                const mine = user && message.sender?.id === user.id
+                return (
+                  <div key={String(message.id)} className={`chat-row ${mine ? 'is-mine' : ''}`}>
+                    <div className={`chat-bubble ${mine ? 'is-mine' : ''} ${message.pending ? 'is-pending' : ''} ${message.failed ? 'is-failed' : ''}`}>
+                      <div className="chat-bubble-head">
+                        <strong>{mine ? 'Вы' : message.sender?.nickname}</strong>
+                        <span>{new Date(message.created_at).toLocaleString('ru-RU')}</span>
+                      </div>
+                      <div className="chat-bubble-text">{message.text}</div>
+
+                      {message.pending && <div className="chat-pending-label">Отправка...</div>}
+
+                      {message.failed && (
+                        <div className="chat-failed-row">
+                          <span className="chat-failed-text">{message.error_detail || 'Не отправлено.'}</span>
+                          <button type="button" className="btn btn-secondary" onClick={() => retryMessage(message.id)}>
+                            Повторить
+                          </button>
+                        </div>
+                      )}
+
+                      {mine && !message.pending && !message.failed && (
+                        <div className="chat-read-state">
+                          {message.read_at ? `Прочитано ${new Date(message.read_at).toLocaleTimeString('ru-RU')}` : 'Не прочитано'}
+                        </div>
+                      )}
                     </div>
-                    <div className="chat-bubble-text">{message.text}</div>
-
-                    {message.pending && <div className="chat-pending-label">Отправка...</div>}
-
-                    {message.failed && (
-                      <div className="chat-failed-row">
-                        <span className="chat-failed-text">{message.error_detail || 'Не отправлено.'}</span>
-                        <button type="button" className="btn btn-secondary" onClick={() => retryMessage(message.id)}>
-                          Повторить
-                        </button>
-                      </div>
-                    )}
-
-                    {mine && !message.pending && !message.failed && (
-                      <div className="chat-read-state">
-                        {message.read_at ? `Прочитано ${new Date(message.read_at).toLocaleTimeString()}` : 'Не прочитано'}
-                      </div>
-                    )}
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
+
+            <aside className="chat-scroll-controls" aria-label="Навигация по чату">
+              <button type="button" className="btn btn-ghost" onClick={scrollToTop} disabled={!canUseCustomScroll}>
+                Вверх
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => scrollByPage(-1)} disabled={!canUseCustomScroll}>
+                Экран выше
+              </button>
+              <div
+                className={`chat-scroll-rail ${canUseCustomScroll ? '' : 'is-disabled'}`}
+                ref={scrollRailRef}
+                onMouseDown={handleScrollRailPointerDown}
+                onTouchStart={handleScrollRailPointerDown}
+              >
+                <div
+                  className="chat-scroll-thumb"
+                  style={{
+                    height: `${thumbHeightPercent}%`,
+                    top: `${thumbTopPercent}%`,
+                  }}
+                />
+              </div>
+              <button type="button" className="btn btn-ghost" onClick={() => scrollByPage(1)} disabled={!canUseCustomScroll}>
+                Экран ниже
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={scrollToBottom}>
+                Вниз
+              </button>
+            </aside>
           </div>
 
           {hasUnreadBelow && (

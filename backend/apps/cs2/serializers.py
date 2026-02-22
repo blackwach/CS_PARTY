@@ -43,6 +43,133 @@ def _extract_headshot_percent(raw_data: dict | None, kills: int, headshots: int)
     return round((headshots / kills) * 100, 2)
 
 
+def _to_int_or_none(value) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed
+
+
+def _extract_premier_rating(raw_data: dict | None) -> int | None:
+    raw = raw_data or {}
+    candidates = [
+        raw.get('premier_rating'),
+        raw.get('premierRating'),
+    ]
+    premier_obj = raw.get('premier')
+    if isinstance(premier_obj, dict):
+        candidates.extend(
+            [
+                premier_obj.get('rating'),
+                premier_obj.get('premier_rating'),
+                premier_obj.get('premierRating'),
+            ]
+        )
+
+    for candidate in candidates:
+        parsed = _to_int_or_none(candidate)
+        if parsed is not None and parsed > 0:
+            return parsed
+    return None
+
+
+def _extract_premier_rank_id(raw_data: dict | None) -> int | None:
+    raw = raw_data or {}
+    candidates = [
+        raw.get('premier_rank_id'),
+        raw.get('premierRankId'),
+        raw.get('premier_rank'),
+    ]
+    premier_obj = raw.get('premier')
+    if isinstance(premier_obj, dict):
+        candidates.extend(
+            [
+                premier_obj.get('rank_id'),
+                premier_obj.get('premier_rank_id'),
+                premier_obj.get('premierRankId'),
+            ]
+        )
+
+    for candidate in candidates:
+        parsed = _to_int_or_none(candidate)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _extract_premier_rank_name(raw_data: dict | None) -> str:
+    raw = raw_data or {}
+    candidates = [
+        raw.get('premier_rank'),
+        raw.get('premierRank'),
+    ]
+    premier_obj = raw.get('premier')
+    if isinstance(premier_obj, dict):
+        candidates.extend(
+            [
+                premier_obj.get('rank'),
+                premier_obj.get('name'),
+                premier_obj.get('premier_rank'),
+            ]
+        )
+
+    for candidate in candidates:
+        text = str(candidate or '').strip()
+        if text:
+            return text
+    return ''
+
+
+def _extract_map_ranks(raw_data: dict | None) -> list[dict]:
+    raw = raw_data or {}
+    rows = raw.get('map_ranks') or raw.get('mapRanks') or []
+    if not isinstance(rows, list):
+        return []
+
+    seen_maps: set[str] = set()
+    normalized: list[dict] = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+
+        map_name = str(row.get('map') or row.get('map_name') or f'map_{index + 1}').strip()
+        if not map_name:
+            continue
+        map_key = map_name.lower()
+        if map_key in seen_maps:
+            continue
+
+        rank_id = _to_int_or_none(row.get('rank_id'))
+        rank_name = str(row.get('rank') or row.get('rank_name') or '').strip()
+        normalized.append(
+            {
+                'map': map_name,
+                'rank_id': rank_id,
+                'rank': rank_name,
+            }
+        )
+        seen_maps.add(map_key)
+
+    return normalized
+
+
+def _unique_matches(obj: PlayerStats) -> list[MatchHistory]:
+    unique: list[MatchHistory] = []
+    seen_ids: set[str] = set()
+    for item in obj.user.cs2_matches.all():
+        key = str(item.external_match_id or '').strip()
+        if not key:
+            continue
+        if key in seen_ids:
+            continue
+        seen_ids.add(key)
+        unique.append(item)
+    return unique
+
+
 class CS2FriendInviteSerializer(serializers.Serializer):
     invite_link = serializers.CharField(max_length=1024)
 
@@ -104,6 +231,10 @@ class MatchHistorySerializer(serializers.ModelSerializer):
 
 class PlayerStatsSerializer(serializers.ModelSerializer):
     rank_id = serializers.SerializerMethodField()
+    premier_rating = serializers.SerializerMethodField()
+    premier_rank_id = serializers.SerializerMethodField()
+    premier_rank = serializers.SerializerMethodField()
+    map_ranks = serializers.SerializerMethodField()
     recent_matches = serializers.SerializerMethodField()
     averages = serializers.SerializerMethodField()
     synced = serializers.SerializerMethodField()
@@ -115,6 +246,10 @@ class PlayerStatsSerializer(serializers.ModelSerializer):
         fields = (
             'rank',
             'rank_id',
+            'premier_rating',
+            'premier_rank_id',
+            'premier_rank',
+            'map_ranks',
             'wins',
             'losses',
             'total_matches',
@@ -127,7 +262,7 @@ class PlayerStatsSerializer(serializers.ModelSerializer):
         )
 
     def get_recent_matches(self, obj):
-        matches = obj.user.cs2_matches.all()[:10]
+        matches = _unique_matches(obj)[:10]
         return MatchHistorySerializer(matches, many=True).data
 
     def get_rank_id(self, obj):
@@ -139,8 +274,20 @@ class PlayerStatsSerializer(serializers.ModelSerializer):
         except (TypeError, ValueError):
             return None
 
+    def get_premier_rating(self, obj):
+        return _extract_premier_rating(obj.raw_data)
+
+    def get_premier_rank_id(self, obj):
+        return _extract_premier_rank_id(obj.raw_data)
+
+    def get_premier_rank(self, obj):
+        return _extract_premier_rank_name(obj.raw_data)
+
+    def get_map_ranks(self, obj):
+        return _extract_map_ranks(obj.raw_data)
+
     def get_averages(self, obj):
-        matches = list(obj.user.cs2_matches.all())
+        matches = _unique_matches(obj)
         total_matches = len(matches)
         if total_matches == 0:
             return {

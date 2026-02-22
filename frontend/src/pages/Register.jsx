@@ -1,6 +1,26 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+
+const EMAIL_DOMAINS = ['gmail.com', 'yandex.ru', 'mail.ru', 'outlook.com', 'icloud.com', 'proton.me']
+
+function buildEmailSuggestions(rawEmail) {
+  const email = String(rawEmail || '').trim().toLowerCase()
+  if (!email || email.includes(' ')) return []
+
+  if (!email.includes('@')) {
+    return EMAIL_DOMAINS.map((domain) => `${email}@${domain}`)
+  }
+
+  const [localPart, domainPart = ''] = email.split('@')
+  if (!localPart) return []
+  if (!domainPart) {
+    return EMAIL_DOMAINS.map((domain) => `${localPart}@${domain}`)
+  }
+  return EMAIL_DOMAINS
+    .filter((domain) => domain.startsWith(domainPart))
+    .map((domain) => `${localPart}@${domain}`)
+}
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -14,8 +34,11 @@ export default function Register() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [showEmailSuggestions, setShowEmailSuggestions] = useState(false)
   const { register } = useAuth()
   const navigate = useNavigate()
+
+  const emailSuggestions = useMemo(() => buildEmailSuggestions(form.email).slice(0, 6), [form.email])
 
   const handleChange = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
@@ -73,14 +96,42 @@ export default function Register() {
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="email">Email</label>
-          <input id="email" name="email" type="email" value={form.email} onChange={handleChange} required autoComplete="email" />
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={form.email}
+            onChange={handleChange}
+            required
+            autoComplete="email"
+            onFocus={() => setShowEmailSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowEmailSuggestions(false), 120)}
+          />
+          {showEmailSuggestions && emailSuggestions.length > 0 && (
+            <div className="email-suggest-wrap">
+              {emailSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className="email-suggest-item"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setForm((prev) => ({ ...prev, email: suggestion }))
+                    setShowEmailSuggestions(false)
+                  }}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="form-group">
           <label htmlFor="nickname">Никнейм</label>
           <input id="nickname" name="nickname" type="text" value={form.nickname} onChange={handleChange} required maxLength={40} placeholder="В игре" />
         </div>
         <div className="form-group">
-          <label htmlFor="initials">-нициалы (2-3 буквы)</label>
+          <label htmlFor="initials">Инициалы (2-3 буквы)</label>
           <input id="initials" name="initials" type="text" value={form.initials} onChange={handleChange} required maxLength={16} placeholder="AB" />
         </div>
         <div className="form-group">

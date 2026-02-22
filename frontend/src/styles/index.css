@@ -254,6 +254,30 @@ input, button, select, textarea {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+.email-suggest-wrap {
+  margin-top: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(13, 18, 25, 0.97);
+  overflow: hidden;
+}
+.email-suggest-item {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.9rem;
+}
+.email-suggest-item:last-child {
+  border-bottom: 0;
+}
+.email-suggest-item:hover {
+  background: rgba(34, 197, 94, 0.14);
+}
 
 .panel {
   background: var(--bg-panel);
@@ -584,10 +608,71 @@ input, button, select, textarea {
   max-height: min(42dvh, 19rem);
   overflow: auto;
 }
+.friends-search-field {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  padding: 0.2rem 0.35rem;
+  margin-bottom: 0.45rem;
+}
+.friends-search-field input {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  min-width: 0;
+  padding: 0.45rem 0.25rem;
+}
+.friends-search-field input:focus {
+  outline: none;
+}
+.friends-search-icon {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  padding: 0 0.15rem;
+}
+.friends-search-clear {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.friends-search-clear:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
 .friends-search-bar {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.45rem;
+}
+.friends-search-hints {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.friends-search-hint-btn {
+  border: 1px solid var(--border);
+  background: rgba(17, 24, 32, 0.82);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.friends-search-hint-btn:hover {
+  color: var(--text);
+  border-color: rgba(34, 197, 94, 0.45);
 }
 .friends-search-results {
   list-style: none;
@@ -816,6 +901,46 @@ input, button, select, textarea {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+.user-profile-cs2 {
+  max-width: 48rem;
+}
+.user-profile-cs2-rank {
+  min-height: 8rem;
+}
+.user-profile-map-ranks {
+  margin-top: 0.9rem;
+}
+.user-profile-map-ranks h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+}
+.user-profile-map-ranks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: 0.45rem;
+}
+.user-profile-map-rank-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 0.45rem 0.55rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.user-profile-map-name {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.user-profile-cs2-updated {
+  margin-top: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
 
 .chat-topbar {
   margin-bottom: 0.85rem;
@@ -899,13 +1024,58 @@ input, button, select, textarea {
   background: rgba(12, 18, 26, 0.65);
   margin-bottom: 0.75rem;
 }
+.chat-messages-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 8.2rem;
+  gap: 0.6rem;
+  align-items: stretch;
+  padding: 0.6rem;
+}
 .chat-messages {
-  max-height: min(60vh, 34rem);
+  max-height: min(58vh, 34rem);
   overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  padding: 0.7rem;
+  padding: 0.2rem 0.3rem 0.2rem 0.1rem;
+}
+.chat-scroll-controls {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(17, 24, 32, 0.82);
+  padding: 0.45rem;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: 0.35rem;
+}
+.chat-scroll-controls .btn {
+  width: 100%;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.78rem;
+}
+.chat-scroll-rail {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(10, 14, 20, 0.95);
+  min-height: 7rem;
+  cursor: pointer;
+}
+.chat-scroll-rail.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.chat-scroll-thumb {
+  position: absolute;
+  left: 0.15rem;
+  right: 0.15rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2ac769, #178f45);
+  min-height: 0.9rem;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.chat-scroll-rail.is-disabled .chat-scroll-thumb {
+  background: linear-gradient(180deg, #5b626d, #3e4550);
 }
 .chat-empty {
   color: var(--text-muted);
@@ -1450,6 +1620,28 @@ input, button, select, textarea {
   color: var(--text-muted);
   font-size: 0.82rem;
 }
+.cs2-map-ranks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.45rem;
+}
+.cs2-map-rank-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 0.45rem 0.6rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.55rem;
+}
+.cs2-map-rank-map {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
 .cs2-health-head {
   display: flex;
   justify-content: space-between;
@@ -1641,7 +1833,20 @@ input, button, select, textarea {
   }
   .chat-messages {
     max-height: 60dvh;
-    padding: 0.6rem;
+    padding: 0.15rem 0.15rem 0.15rem 0.05rem;
+  }
+  .chat-messages-layout {
+    grid-template-columns: 1fr;
+    padding: 0.55rem;
+  }
+  .chat-scroll-controls {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: auto auto;
+    gap: 0.4rem;
+  }
+  .chat-scroll-controls .chat-scroll-rail {
+    grid-column: 1 / -1;
+    min-height: 2rem;
   }
   .chat-bubble {
     max-width: 100%;
