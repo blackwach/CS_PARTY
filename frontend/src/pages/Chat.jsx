@@ -101,6 +101,7 @@ export default function Chat() {
 
   const canChat = peer?.can_chat === true
   const peerId = Number(userId)
+  const peerInitial = String(peer?.nickname || '?').slice(0, 1).toUpperCase()
 
   const loadPeerPresence = useCallback(async () => {
     try {
@@ -494,16 +495,28 @@ export default function Chat() {
       {error && <div className="alert alert-error">{error}</div>}
 
       {peer && (
-        <div className="chat-topbar">
-          <Link to={`/users/${peer.id}`}>Открыть профиль</Link>
-          <Link to="/chats">Все диалоги</Link>
-          <span className={`chat-presence ${peer.is_online ? 'is-online' : ''}`}>
-            {peer.is_online ? 'В сети' : formatLastSeen(peer.last_seen_at)}
-          </span>
-          {canChat && (
-            <span className="chat-transport-status">{wsConnected ? 'Синхронизация: онлайн' : 'Синхронизация: переподключение'}</span>
-          )}
-          {peerTyping && <span className="chat-typing">печатает...</span>}
+        <div className="chat-peer-card">
+          <div className="chat-peer-main">
+            {peer.avatar ? (
+              <img src={peer.avatar} alt={peer.nickname} className="chat-peer-avatar" />
+            ) : (
+              <div className="chat-peer-avatar chat-peer-avatar-fallback">{peerInitial}</div>
+            )}
+            <div className="chat-peer-meta">
+              <strong>{peer.nickname}</strong>
+              <span className={`chat-presence ${peer.is_online ? 'is-online' : ''}`}>
+                {peer.is_online ? 'В сети' : formatLastSeen(peer.last_seen_at)}
+              </span>
+              {canChat && (
+                <span className="chat-transport-status">{wsConnected ? 'Синхронизация: онлайн' : 'Синхронизация: переподключение'}</span>
+              )}
+              {peerTyping && <span className="chat-typing">Печатает...</span>}
+            </div>
+          </div>
+          <div className="chat-peer-actions">
+            <Link to={`/users/${peer.id}`}>Профиль</Link>
+            <Link to="/chats">Все диалоги</Link>
+          </div>
         </div>
       )}
 

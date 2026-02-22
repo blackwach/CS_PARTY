@@ -54,6 +54,14 @@ class SocialApiTests(APITestCase):
         )
         self.assertEqual(send_message.status_code, status.HTTP_201_CREATED)
         self.assertEqual(send_message.data['text'], 'hello')
+        chat_notification = InAppNotification.objects.filter(
+            user=self.alice,
+            type=InAppNotification.TYPE_SYSTEM,
+            payload__kind='chat_message',
+            payload__message_id=send_message.data['id'],
+        ).first()
+        self.assertIsNotNone(chat_notification)
+        self.assertFalse(chat_notification.is_read)
 
         self.client.force_authenticate(user=self.alice)
         list_messages = self.client.get(f'/api/auth/chats/{self.bob.id}/messages/')
@@ -61,6 +69,8 @@ class SocialApiTests(APITestCase):
         self.assertEqual(len(list_messages.data), 1)
         self.assertIsNotNone(list_messages.data[0]['read_at'])
         self.assertIsNotNone(DirectMessage.objects.get(id=send_message.data['id']).read_at)
+        chat_notification.refresh_from_db()
+        self.assertTrue(chat_notification.is_read)
 
     def test_public_profile_contains_friendship_status(self):
         self.client.force_authenticate(user=self.alice)

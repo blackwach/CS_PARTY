@@ -163,9 +163,14 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.accounts.tasks.enforce_email_verification_timeouts_task',
         'schedule': 60.0,
     },
+    'notify-unread-direct-messages-every-5-minutes': {
+        'task': 'apps.accounts.tasks.notify_unread_direct_messages_task',
+        'schedule': 5 * 60.0,
+    },
 }
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+CS2_BOT_ADMIN_EMAIL = os.getenv('CS2_BOT_ADMIN_EMAIL', 'backwach1@yandex.ru').strip().lower()
 CS2_STATS_API_URL = os.getenv('CS2_STATS_API_URL', '').rstrip('/')
 CS2_STATS_API_TOKEN = os.getenv('CS2_STATS_API_TOKEN', '')
 CS2_STATS_STEAM_USERNAME = os.getenv('CS2_STATS_STEAM_USERNAME', os.getenv('STEAM_USERNAME', ''))

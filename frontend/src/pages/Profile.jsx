@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { auth as authApi } from '../api'
 import { useAuth } from '../context/AuthContext'
 
+const TELEGRAM_BOT_LINK = (import.meta.env.VITE_TELEGRAM_BOT_LINK || 'https://t.me/cs_party_bot').trim()
+
 export default function Profile() {
   const { user, updateProfile, loadUser } = useAuth()
   const [form, setForm] = useState({
@@ -40,6 +42,7 @@ export default function Profile() {
     if (avatarFile) return URL.createObjectURL(avatarFile)
     return user?.avatar || ''
   }, [avatarFile, user?.avatar])
+  const telegramBotLabel = useMemo(() => TELEGRAM_BOT_LINK.replace(/^https?:\/\/t\.me\//i, '@'), [])
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -165,7 +168,7 @@ export default function Profile() {
           <div className="profile-avatar-row">
             <div className="profile-avatar-wrap">
               {avatarPreview ? (
-                <img src={avatarPreview} alt="avatar preview" className="profile-avatar-preview" />
+                <img src={avatarPreview} alt="Предпросмотр аватара" className="profile-avatar-preview" />
               ) : (
                 <div className="profile-avatar-placeholder">{(form.nickname || 'U').slice(0, 1).toUpperCase()}</div>
               )}
@@ -223,6 +226,9 @@ export default function Profile() {
 
       <div className="panel">
         <h2>Telegram</h2>
+        <p className="form-hint">
+          Telegram-бот: <a href={TELEGRAM_BOT_LINK} target="_blank" rel="noreferrer">{telegramBotLabel}</a>
+        </p>
         {user.telegram_chat_id ? (
           <p style={{ color: 'var(--text-muted)' }}>
             Привязан: @{user.telegram_username || `id ${user.telegram_chat_id}`}
@@ -230,7 +236,7 @@ export default function Profile() {
         ) : (
           <>
             <p style={{ color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-              Получите код и отправьте его вашему Telegram-боту.
+              Получите код и отправьте его боту командой <strong>/link CODE</strong>.
             </p>
             {linkCode && (
               <div className="alert alert-success" style={{ marginBottom: '0.75rem' }}>

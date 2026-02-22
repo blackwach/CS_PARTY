@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { auth as authApi } from '../api'
 
 function formatLastSeen(value) {
   if (!value) return ''
-  return `Был(а) ${new Date(value).toLocaleString()}`
+  return `Был(а) ${new Date(value).toLocaleString('ru-RU')}`
 }
 
 export default function FriendsPanel({ isVisible, onClose }) {
   const [friends, setFriends] = useState([])
+  const [incomingRequests, setIncomingRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -16,20 +17,29 @@ export default function FriendsPanel({ isVisible, onClose }) {
   const [searchError, setSearchError] = useState('')
   const [hasSearched, setHasSearched] = useState(false)
   const [requestState, setRequestState] = useState({})
+  const [incomingActionState, setIncomingActionState] = useState({})
   const navigate = useNavigate()
 
-  const loadFriends = () => {
-    authApi
-      .friends()
-      .then((res) => setFriends(Array.isArray(res.data) ? res.data : []))
+  const loadFriendsData = useCallback(() => {
+    return Promise.all([authApi.friends(), authApi.friendRequestsIncoming()])
+      .then(([friendsRes, incomingRes]) => {
+        setFriends(Array.isArray(friendsRes.data) ? friendsRes.data : [])
+        setIncomingRequests(Array.isArray(incomingRes.data) ? incomingRes.data : [])
+      })
+      .catch(() => {
+        setFriends([])
+        setIncomingRequests([])
+      })
       .finally(() => setLoading(false))
-  }
+  }, [])
 
   useEffect(() => {
-    loadFriends()
-    const intervalId = setInterval(loadFriends, 10000)
+    loadFriendsData()
+    const intervalId = setInterval(loadFriendsData, 10000)
     return () => clearInterval(intervalId)
-  }, [])
+  }, [loadFriendsData])
+
+  const onlineFriendsCount = useMemo(() => friends.filter((item) => item.friend?.is_online).length, [friends])
 
   const searchUsers = async () => {
     const query = search.trim()
@@ -65,11 +75,33 @@ export default function FriendsPanel({ isVisible, onClose }) {
     }
   }
 
+  const processIncoming = async (requestId, action) => {
+    setIncomingActionState((prev) => ({ ...prev, [requestId]: 'loading' }))
+    try {
+      if (action === 'accept') {
+        await authApi.friendRequestAccept(requestId)
+      } else {
+        await authApi.friendRequestDecline(requestId)
+      }
+      await loadFriendsData()
+    } catch (err) {
+      setIncomingActionState((prev) => ({
+        ...prev,
+        [requestId]: err.response?.data?.detail || 'Не удалось обработать заявку.',
+      }))
+    }
+  }
+
   return (
     <aside className={`friends-panel ${isVisible ? 'is-visible' : ''}`}>
       <div className="friends-panel-header">
         <h3>Друзья</h3>
         <button type="button" className="btn btn-ghost" onClick={onClose}>Закрыть</button>
+      </div>
+
+      <div className="friends-panel-stats">
+        <span>Всего: {friends.length}</span>
+        <span>Онлайн: {onlineFriendsCount}</span>
       </div>
 
       <div className="friends-search-box">
@@ -79,7 +111,7 @@ export default function FriendsPanel({ isVisible, onClose }) {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => event.key === 'Enter' && (event.preventDefault(), searchUsers())}
-            placeholder="Найти по нику"
+            placeholder="Найти игрока по нику"
           />
           <button type="button" className="btn btn-secondary" onClick={searchUsers} disabled={searching}>
             {searching ? 'Поиск...' : 'Найти'}
@@ -91,6 +123,7 @@ export default function FriendsPanel({ isVisible, onClose }) {
             {searchResults.map((user) => (
               <li key={user.id} className="friends-search-item">
                 <button type="button" className="btn btn-ghost" onClick={() => navigate(`/users/${user.id}`)}>
+                  <span className={`friend-status-dot ${user.is_online ? 'is-online' : ''}`} />
                   {user.nickname}
                 </button>
                 <div className="friends-search-actions">
@@ -120,6 +153,53 @@ export default function FriendsPanel({ isVisible, onClose }) {
           <p className="form-hint">Никого не найдено.</p>
         )}
       </div>
+
+      {incomingRequests.length > 0 && (
+        <section className="friends-requests-box">
+          <h4>Входящие заявки</h4>
+          <ul className="friends-requests-list">
+            {incomingRequests.map((item) => {
+              const sender = item.sender || {}
+              const actionState = incomingActionState[item.id] || ''
+              return (
+                <li key={item.id} className="friends-request-item">
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      navigate(`/users/${sender.id}`)
+                      onClose()
+                    }}
+                  >
+                    {sender.nickname || 'Пользователь'}
+                  </button>
+                  <div className="friends-request-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={actionState === 'loading'}
+                      onClick={() => processIncoming(item.id, 'accept')}
+                    >
+                      Принять
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={actionState === 'loading'}
+                      onClick={() => processIncoming(item.id, 'decline')}
+                    >
+                      Отклонить
+                    </button>
+                  </div>
+                  {actionState && actionState !== 'loading' && (
+                    <small className="form-error">{actionState}</small>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
 
       {loading ? (
         <div className="loading-wrap"><div className="loading-spinner" /></div>

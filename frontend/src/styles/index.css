@@ -500,6 +500,38 @@ input, button, select, textarea {
 .notification-error {
   margin-bottom: 0.35rem;
 }
+.notification-toast-stack {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(24rem, calc(100vw - 1rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  z-index: 95;
+}
+.notification-toast {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(13, 18, 25, 0.98);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+  padding: 0.65rem 0.75rem;
+}
+.notification-toast-texts p {
+  margin: 0.3rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+.notification-toast-actions {
+  margin-top: 0.55rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+.notification-toast-actions .btn {
+  padding: 0.22rem 0.5rem;
+}
 
 .friends-toggle-btn {
   margin-left: 0.25rem;
@@ -534,6 +566,17 @@ input, button, select, textarea {
 .friends-panel-header h3 {
   margin: 0;
   font-size: 1rem;
+}
+.friends-panel-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
 }
 .friends-search-box {
   padding: 0.65rem 0.75rem;
@@ -583,6 +626,47 @@ input, button, select, textarea {
   align-items: flex-end;
   gap: 0.2rem;
   flex-shrink: 0;
+}
+.friends-requests-box {
+  border-bottom: 1px solid var(--border);
+  padding: 0.65rem 0.75rem;
+  max-height: min(24dvh, 10.5rem);
+  overflow: auto;
+}
+.friends-requests-box h4 {
+  margin: 0 0 0.55rem;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.friends-requests-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.friends-request-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(17, 24, 32, 0.75);
+  padding: 0.45rem;
+}
+.friends-request-item > .btn {
+  width: 100%;
+  justify-content: flex-start;
+  margin-bottom: 0.45rem;
+}
+.friends-request-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+.friends-request-actions .btn {
+  flex: 1;
+  padding: 0.28rem 0.4rem;
+  font-size: 0.82rem;
 }
 .friends-list {
   list-style: none;
@@ -740,6 +824,52 @@ input, button, select, textarea {
   flex-wrap: wrap;
   gap: 0.75rem;
 }
+.chat-peer-card {
+  margin-bottom: 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(17, 24, 32, 0.72);
+}
+.chat-peer-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+.chat-peer-avatar {
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.chat-peer-avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  background: var(--bg-elevated);
+}
+.chat-peer-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.chat-peer-meta strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-peer-actions {
+  display: inline-flex;
+  gap: 0.65rem;
+  align-items: center;
+}
 .chat-panel {
   max-width: 50rem;
 }
@@ -875,6 +1005,32 @@ input, button, select, textarea {
   gap: 0.45rem;
   flex-wrap: wrap;
 }
+.chats-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+.chats-summary-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(17, 24, 32, 0.72);
+  padding: 0.6rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.chats-summary-card span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+.chats-summary-card strong {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+}
+.chats-search-panel {
+  margin-bottom: 0.75rem;
+}
 .chats-list {
   display: flex;
   flex-direction: column;
@@ -914,6 +1070,20 @@ input, button, select, textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.chats-avatar {
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.chats-avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: var(--bg-panel);
 }
 .chats-time {
   color: var(--text-muted);
@@ -1235,6 +1405,22 @@ input, button, select, textarea {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+.stat-box-rank {
+  display: grid;
+  place-items: center;
+  gap: 0.35rem;
+}
+.cs2-rank-badge {
+  width: 3.2rem;
+  height: 3.2rem;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 14px #00000070);
+}
+.cs2-rank-text {
+  font-size: 0.95rem;
+  line-height: 1.2;
+  color: var(--text);
+}
 .cs2-matches-list {
   list-style: none;
   margin: 0;
@@ -1258,6 +1444,11 @@ input, button, select, textarea {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+.cs2-match-hs {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 .cs2-health-head {
   display: flex;
@@ -1371,6 +1562,19 @@ input, button, select, textarea {
   .notification-close-btn {
     display: inline-flex;
   }
+  .notification-toast-stack {
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    width: auto;
+  }
+  .notification-toast-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .notification-toast-actions .btn {
+    width: 100%;
+  }
   .friends-panel {
     top: 0;
     bottom: 0;
@@ -1406,6 +1610,12 @@ input, button, select, textarea {
     align-items: stretch;
   }
   .room-search-result-item .btn {
+    width: 100%;
+  }
+  .friends-request-actions {
+    flex-direction: column;
+  }
+  .friends-request-actions .btn {
     width: 100%;
   }
   .room-create-actions .btn {
@@ -1451,9 +1661,19 @@ input, button, select, textarea {
   .chat-failed-row .btn {
     width: 100%;
   }
+  .chat-peer-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .chat-peer-actions {
+    justify-content: space-between;
+  }
   .chats-head {
     flex-direction: column;
     align-items: stretch;
+  }
+  .chats-summary {
+    grid-template-columns: 1fr;
   }
   .chats-head-actions .btn {
     width: 100%;

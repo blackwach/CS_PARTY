@@ -138,3 +138,22 @@ class Cs2StatsFlowTests(APITestCase):
         self.assertEqual(sync_response.data['source'], 'public_profile')
         self.assertEqual(sync_response.data['total_matches'], 0)
         self.assertTrue(sync_response.data['note'])
+
+    @override_settings(CS2_BOT_ADMIN_EMAIL='backwach1@yandex.ru')
+    def test_cs2_health_management_is_limited_to_specific_email(self):
+        denied_response = self.client.get('/api/cs2/health/')
+        self.assertEqual(denied_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        admin_user = User.objects.create_user(
+            email='backwach1@yandex.ru',
+            password='StrongPass123!',
+            nickname='cs2_admin',
+            birth_date=date(1997, 1, 1),
+            initials='CA',
+            is_active=True,
+            is_email_verified=True,
+        )
+        self.client.force_authenticate(user=admin_user)
+
+        allowed_response = self.client.get('/api/cs2/health/')
+        self.assertEqual(allowed_response.status_code, status.HTTP_200_OK)

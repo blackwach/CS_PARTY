@@ -27,6 +27,15 @@ from .models import (
 )
 
 EMAIL_VERIFICATION_TTL_SECONDS = 10 * 60
+CHAT_NOTIFICATION_KIND = 'chat_message'
+CHAT_UNREAD_REMINDER_KIND = 'chat_unread_hour_alert'
+
+
+def _compact_message_preview(text: str, limit: int = 140) -> str:
+    compact = ' '.join(str(text or '').split())
+    if len(compact) <= limit:
+        return compact
+    return f'{compact[: limit - 1]}…'
 
 
 def create_action_token(
@@ -401,6 +410,29 @@ def mark_direct_messages_as_read(reader: User, peer: User) -> list[int]:
 
     read_at = timezone.now()
     unread_qs.update(read_at=read_at)
+
+    # Keep chat-related in-app notifications synchronized with read state.
+    unread_chat_notifications = InAppNotification.objects.filter(
+        user=reader,
+        is_read=False,
+        type=InAppNotification.TYPE_SYSTEM,
+        payload__kind=CHAT_NOTIFICATION_KIND,
+    )
+    for message_id in unread_ids:
+        notification = unread_chat_notifications.filter(payload__message_id=message_id).first()
+        if notification:
+            notification.mark_read()
+
+    unread_reminders = InAppNotification.objects.filter(
+        user=reader,
+        is_read=False,
+        type=InAppNotification.TYPE_SYSTEM,
+        payload__kind=CHAT_UNREAD_REMINDER_KIND,
+        payload__conversation_id=conversation.id,
+    )
+    for notification in unread_reminders:
+        notification.mark_read()
+
     broadcast_chat_read(
         conversation=conversation,
         reader_id=reader.id,
@@ -421,6 +453,24 @@ def send_direct_message(sender: User, recipient: User, text: str) -> DirectMessa
     conversation = get_or_create_direct_conversation(sender, recipient)
     message = DirectMessage.objects.create(conversation=conversation, sender=sender, text=text.strip())
     conversation.save(update_fields=['updated_at'])
+
+    preview = _compact_message_preview(message.text)
+    create_notification(
+        user=recipient,
+        actor=sender,
+        notification_type=InAppNotification.TYPE_SYSTEM,
+        title='Новое сообщение',
+        message=f'{sender.nickname}: {preview}',
+        payload={
+            'kind': CHAT_NOTIFICATION_KIND,
+            'message_id': message.id,
+            'conversation_id': conversation.id,
+            'sender_id': sender.id,
+            'sender_nickname': sender.nickname,
+            'chat_user_id': sender.id,
+        },
+    )
+
     broadcast_chat_message(message)
     broadcast_dialogs_refresh(user_id=sender.id, reason='message')
     broadcast_dialogs_refresh(user_id=recipient.id, reason='message')

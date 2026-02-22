@@ -26,6 +26,10 @@ const RECONNECT_DELAY_THROTTLE_MS = parseInt(
   process.env.CS2_STATS_RECONNECT_DELAY_THROTTLE_MS || '300000',
   10
 );
+const STEAM_GUARD_MANUAL_TIMEOUT_MS = parseInt(
+  process.env.CS2_STATS_STEAM_GUARD_MANUAL_TIMEOUT_MS || '180000',
+  10
+);
 const STEAM_DATA_DIR = (process.env.CS2_STATS_STEAM_DATA_DIR || path.join(__dirname, '.steam-data')).trim();
 
 const STEAM_USERNAME =
@@ -36,6 +40,7 @@ const STEAM_USERNAME =
 const STEAM_PASSWORD =
   process.env.CS2_STATS_STEAM_PASSWORD ||
   process.env.STEAM_PASSWORD ||
+  process.env.STEAM_PASS ||
   '';
 const STEAM_2FA_SECRET =
   process.env.CS2_STATS_STEAM_2FA_SECRET ||
@@ -104,24 +109,24 @@ const STEAM_EMAIL_GUARD_READY = Boolean(
 
 const RANK_NAMES = {
   0: 'Без ранга',
-  1: '1',
-  2: '2',
-  3: '3',
-  4: '4',
-  5: '5',
-  6: '6',
-  7: '7',
-  8: '8',
-  9: '9',
-  10: '10',
-  11: '11',
-  12: '12',
-  13: '13',
-  14: '14',
-  15: '15',
-  16: '16',
-  17: '17',
-  18: '18',
+  1: 'Silver I',
+  2: 'Silver II',
+  3: 'Silver III',
+  4: 'Silver IV',
+  5: 'Silver Elite',
+  6: 'Silver Elite Master',
+  7: 'Gold Nova I',
+  8: 'Gold Nova II',
+  9: 'Gold Nova III',
+  10: 'Gold Nova Master',
+  11: 'Master Guardian I',
+  12: 'Master Guardian II',
+  13: 'Master Guardian Elite',
+  14: 'Distinguished Master Guardian',
+  15: 'Legendary Eagle',
+  16: 'Legendary Eagle Master',
+  17: 'Supreme Master First Class',
+  18: 'Global Elite',
 };
 
 const app = express();
@@ -135,6 +140,7 @@ let reconnectTimer = null;
 let reconnectInProgress = false;
 let lastSubmittedSteamGuardCode = '';
 let lastSubmittedSteamGuardAt = 0;
+let pendingSteamGuard = null;
 
 const botState = {
   logged_on: false,
@@ -651,6 +657,110 @@ function rankName(rankId) {
   return RANK_NAMES[rankId] || String(rankId);
 }
 
+function detectRankId(rawRankId) {
+  if (rawRankId === null || rawRankId === undefined) return null;
+  const parsed = parseInt(rawRankId, 10);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+}
+
+function parseIntSafe(value, fallback = 0) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseFloatSafe(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getSteamGuardPendingStatus() {
+  if (!pendingSteamGuard) return null;
+  return {
+    source: pendingSteamGuard.source,
+    domain: pendingSteamGuard.domain,
+    requested_at: pendingSteamGuard.requested_at,
+    expires_at: pendingSteamGuard.expires_at,
+    last_code_wrong: pendingSteamGuard.last_code_wrong,
+  };
+}
+
+function clearPendingSteamGuard(opts = {}) {
+  const cancel = Boolean(opts.cancel);
+  if (!pendingSteamGuard) return;
+
+  const current = pendingSteamGuard;
+  pendingSteamGuard = null;
+
+  if (current.timer) {
+    clearTimeout(current.timer);
+  }
+
+  if (cancel && typeof current.callback === 'function') {
+    try {
+      current.callback('');
+    } catch (_) {
+      // ignore callback errors
+    }
+  }
+}
+
+function registerSteamGuardRequest({ domain, callback, lastCodeWrong, isEmailGuard }) {
+  clearPendingSteamGuard({ cancel: true });
+
+  const timeoutMs = Math.max(STEAM_GUARD_MANUAL_TIMEOUT_MS, 30000);
+  const requestedAtMs = Date.now();
+  const state = {
+    callback,
+    source: isEmailGuard ? 'email' : '2fa',
+    domain: isEmailGuard ? String(domain || '') : '',
+    requested_at: new Date(requestedAtMs).toISOString(),
+    expires_at: new Date(requestedAtMs + timeoutMs).toISOString(),
+    last_code_wrong: Boolean(lastCodeWrong),
+    timer: null,
+  };
+
+  state.timer = setTimeout(() => {
+    if (pendingSteamGuard !== state) return;
+    setLastError('Steam Guard code timed out before it was submitted');
+    clearPendingSteamGuard({ cancel: true });
+  }, timeoutMs);
+
+  pendingSteamGuard = state;
+}
+
+function submitSteamGuardCode(code, source = 'manual') {
+  if (!pendingSteamGuard) {
+    throw new Error('Steam Guard code is not requested right now');
+  }
+
+  const normalizedCode = normalizeSteamGuardCode(code);
+  if (!normalizedCode) {
+    throw new Error('Steam Guard code must contain 5 letters/digits');
+  }
+
+  const current = pendingSteamGuard;
+  if (current.timer) {
+    clearTimeout(current.timer);
+  }
+  pendingSteamGuard = null;
+
+  try {
+    current.callback(normalizedCode);
+  } catch (err) {
+    throw new Error(`Failed to submit Steam Guard code: ${err?.message || err}`);
+  }
+
+  lastSubmittedSteamGuardCode = normalizedCode;
+  lastSubmittedSteamGuardAt = Date.now();
+  botState.last_error = null;
+  console.log(`[steam] steamGuard code submitted (${source})`);
+}
+
 function getBotStatus() {
   return {
     logged_on: botState.logged_on,
@@ -663,6 +773,9 @@ function getBotStatus() {
     reconnect_in_progress: reconnectInProgress,
     email_guard_auto_enabled: STEAM_EMAIL_GUARD_ENABLED,
     email_guard_auto_ready: STEAM_EMAIL_GUARD_READY,
+    steam_credentials_set: Boolean(STEAM_USERNAME && STEAM_PASSWORD),
+    steam_2fa_secret_set: Boolean(STEAM_2FA_SECRET),
+    steam_guard_pending: getSteamGuardPendingStatus(),
     steam_data_dir: STEAM_DATA_DIR,
   };
 }
@@ -683,6 +796,8 @@ function requireToken(req, res, next) {
 }
 
 function resetClient() {
+  clearPendingSteamGuard({ cancel: true });
+
   try {
     if (steamClient) {
       steamClient.removeAllListeners();
@@ -741,46 +856,44 @@ function setupSteamHandlers() {
       lastSubmittedSteamGuardAt = 0;
     }
 
+    registerSteamGuardRequest({
+      domain,
+      callback,
+      lastCodeWrong,
+      isEmailGuard,
+    });
+
     (async () => {
       try {
         let code = '';
 
         if (!isEmailGuard) {
           if (!STEAM_2FA_SECRET) {
-            throw new Error('Steam Guard 2FA requested, but STEAM_2FA_SECRET is not configured');
+            throw new Error('Steam Guard 2FA requested, but CS2_STATS_STEAM_2FA_SECRET is not configured');
           }
           code = SteamTotp.getAuthCode(STEAM_2FA_SECRET);
-        } else {
-          if (!STEAM_EMAIL_GUARD_READY) {
-            throw new Error(
-              'Steam email guard requested, but IMAP auto-fetch is not configured. Set CS2_STATS_STEAM_EMAIL_GUARD_ENABLED=true and IMAP env vars.'
-            );
-          }
-          code = await fetchSteamGuardCodeFromEmail();
+          submitSteamGuardCode(code, 'totp-auto');
+          return;
         }
 
-        const normalizedCode = normalizeSteamGuardCode(code);
-        if (!normalizedCode) {
-          throw new Error('Resolved Steam Guard code has invalid format');
+        if (!STEAM_EMAIL_GUARD_READY) {
+          throw new Error(
+            'Steam email guard requested, but IMAP auto-fetch is not configured. You can submit the code manually via POST /bot/steam-guard'
+          );
         }
-        callback(normalizedCode);
-        lastSubmittedSteamGuardCode = normalizedCode;
-        lastSubmittedSteamGuardAt = Date.now();
-        console.log('[steam] steamGuard code submitted');
+
+        code = await fetchSteamGuardCodeFromEmail();
+        submitSteamGuardCode(code, 'email-auto');
       } catch (err) {
-        const message = err?.message || 'Failed to resolve Steam Guard code';
+        const message = err?.message || 'Failed to resolve Steam Guard code automatically';
         setLastError(message);
-        console.error('[steam] steamGuard error:', message);
-        try {
-          callback('');
-        } catch (_) {
-          // ignore callback errors
-        }
+        console.error('[steam] steamGuard auto-resolve error:', message);
       }
     })();
   });
 
   steamClient.on('loggedOn', () => {
+    clearPendingSteamGuard();
     botState.logged_on = true;
     botState.last_error = null;
     steamClient.setPersona(SteamUser.EPersonaState.Offline);
@@ -789,6 +902,7 @@ function setupSteamHandlers() {
   });
 
   steamClient.on('error', (err) => {
+    clearPendingSteamGuard({ cancel: true });
     botState.logged_on = false;
     gcReady = false;
     botState.gc_ready = false;
@@ -800,6 +914,7 @@ function setupSteamHandlers() {
   });
 
   steamClient.on('disconnected', (eresult, msg) => {
+    clearPendingSteamGuard({ cancel: true });
     botState.logged_on = false;
     gcReady = false;
     botState.gc_ready = false;
@@ -839,7 +954,7 @@ async function connectBot(source = 'startup') {
 
   try {
     if (!STEAM_USERNAME || !STEAM_PASSWORD) {
-      throw new Error('STEAM_USERNAME/STEAM_PASSWORD are not set');
+      throw new Error('Steam credentials are not set (CS2_STATS_STEAM_USERNAME / CS2_STATS_STEAM_PASSWORD)');
     }
 
     botState.reconnect_attempts += 1;
@@ -968,7 +1083,8 @@ function addFriendBySteamId(steamId64) {
 
 function toBackendFormat(profile, recentMatches) {
   const mainRank = profile && (profile.ranking || (profile.rankings && profile.rankings[0]));
-  const rankId = mainRank && (mainRank.rank_id != null ? mainRank.rank_id : profile.rank_id);
+  const rawRankId = mainRank && (mainRank.rank_id != null ? mainRank.rank_id : profile.rank_id);
+  const rankId = detectRankId(rawRankId);
   const wins =
     ((mainRank && (mainRank.wins != null ? mainRank.wins : profile.wins)) || profile?.wins || 0);
 
@@ -977,6 +1093,35 @@ function toBackendFormat(profile, recentMatches) {
     let playedAt = item.played_at || item.time || item.timestamp || null;
     if (typeof playedAt === 'number') playedAt = new Date(playedAt * 1000).toISOString();
     if (playedAt && typeof playedAt.toISOString === 'function') playedAt = playedAt.toISOString();
+
+    const kills = parseIntSafe(item.kills || item.kills_count || 0, 0);
+    const deaths = parseIntSafe(item.deaths || item.deaths_count || 0, 0);
+    const assists = parseIntSafe(item.assists || item.assists_count || 0, 0);
+
+    const rawHeadshots =
+      item.headshots ??
+      item.headshot_kills ??
+      item.hs_kills ??
+      item.headshots_count ??
+      item.hs ??
+      0;
+    const headshots = Math.max(0, parseIntSafe(rawHeadshots, 0));
+    const safeHeadshots = kills > 0 ? Math.min(headshots, kills) : headshots;
+
+    const rawHeadshotPercent =
+      item.headshot_percent ??
+      item.hs_percent ??
+      item.headshots_percentage ??
+      item.hs_percentage ??
+      null;
+    const computedHeadshotPercent =
+      rawHeadshotPercent != null
+        ? clamp(parseFloatSafe(rawHeadshotPercent, 0), 0, 100)
+        : kills > 0
+          ? clamp((safeHeadshots / kills) * 100, 0, 100)
+          : 0;
+
+    const matchRankId = detectRankId(item.rank_id != null ? item.rank_id : rawRankId);
 
     return {
       id: String(matchId),
@@ -988,10 +1133,13 @@ function toBackendFormat(profile, recentMatches) {
           : item.win === false || item.result === 'lose'
             ? 'lose'
             : 'draw',
-      kills: parseInt(item.kills || item.kills_count || 0, 10) || 0,
-      deaths: parseInt(item.deaths || item.deaths_count || 0, 10) || 0,
-      assists: parseInt(item.assists || item.assists_count || 0, 10) || 0,
-      rank: rankName(item.rank_id != null ? item.rank_id : rankId),
+      kills,
+      deaths,
+      assists,
+      headshots: safeHeadshots,
+      headshot_percent: Number(computedHeadshotPercent.toFixed(2)),
+      rank_id: matchRankId,
+      rank: rankName(matchRankId),
     };
   });
 
@@ -999,6 +1147,7 @@ function toBackendFormat(profile, recentMatches) {
   const totalMatches = matches.length > 0 ? (wins + losses) || matches.length : wins + losses;
 
   return {
+    rank_id: rankId,
     rank: rankName(rankId),
     wins,
     losses,
@@ -1043,6 +1192,29 @@ app.post('/bot/reconnect', requireToken, async (req, res) => {
   }
   await connectBot('manual-reconnect');
   res.status(202).json({ ok: true, bot: getBotStatus() });
+});
+
+app.post('/bot/steam-guard', requireToken, async (req, res) => {
+  if (!pendingSteamGuard) {
+    return res.status(409).json({
+      error: 'Steam Guard code is not requested right now',
+      bot: getBotStatus(),
+    });
+  }
+
+  try {
+    submitSteamGuardCode(req.body?.code || '', 'manual-api');
+    return res.status(202).json({
+      ok: true,
+      detail: 'Steam Guard code submitted',
+      bot: getBotStatus(),
+    });
+  } catch (err) {
+    return res.status(400).json({
+      error: err?.message || 'Failed to submit Steam Guard code',
+      bot: getBotStatus(),
+    });
+  }
 });
 
 app.post('/bot/friends/add', requireToken, async (req, res) => {

@@ -33,6 +33,7 @@ export default function Chats() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [wsConnected, setWsConnected] = useState(false)
+  const [search, setSearch] = useState('')
   const reconnectTimerRef = useRef(null)
   const reconnectAttemptsRef = useRef(0)
   const socketRef = useRef(null)
@@ -157,6 +158,23 @@ export default function Chats() {
     })
   }, [dialogs])
 
+  const filteredDialogs = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return sortedDialogs
+    return sortedDialogs.filter((dialog) => {
+      const nickname = String(dialog?.friend?.nickname || '').toLowerCase()
+      const preview = extractPreview(dialog).toLowerCase()
+      return nickname.includes(query) || preview.includes(query)
+    })
+  }, [search, sortedDialogs])
+
+  const summary = useMemo(() => {
+    const total = dialogs.length
+    const unreadTotal = dialogs.reduce((acc, item) => acc + Number(item?.unread_count || 0), 0)
+    const onlineCount = dialogs.filter((item) => Boolean(item?.friend?.is_online)).length
+    return { total, unreadTotal, onlineCount }
+  }, [dialogs])
+
   if (loading) {
     return (
       <div className="loading-wrap">
@@ -170,7 +188,7 @@ export default function Chats() {
       <div className="chats-head">
         <div>
           <h1 className="page-title">Диалоги</h1>
-          <p className="chats-subtitle">{wsConnected ? 'Обновление: realtime' : 'Обновление: fallback-режим'}</p>
+          <p className="chats-subtitle">{wsConnected ? 'Обновление: в реальном времени' : 'Обновление: резервный режим'}</p>
         </div>
         <div className="chats-head-actions">
           <button type="button" className="btn btn-ghost" onClick={() => loadDialogs(false)}>
@@ -183,13 +201,39 @@ export default function Chats() {
       </div>
       {error && <div className="alert alert-error">{error}</div>}
 
-      {sortedDialogs.length === 0 ? (
+      <div className="chats-summary">
+        <div className="chats-summary-card">
+          <span>Диалогов</span>
+          <strong>{summary.total}</strong>
+        </div>
+        <div className="chats-summary-card">
+          <span>Непрочитанных</span>
+          <strong>{summary.unreadTotal}</strong>
+        </div>
+        <div className="chats-summary-card">
+          <span>Друзей онлайн</span>
+          <strong>{summary.onlineCount}</strong>
+        </div>
+      </div>
+
+      <div className="panel chats-search-panel">
+        <input
+          type="text"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Поиск по нику или последнему сообщению"
+        />
+      </div>
+
+      {filteredDialogs.length === 0 ? (
         <div className="panel">
-          <p className="chats-empty">У вас пока нет активных диалогов с друзьями.</p>
+          <p className="chats-empty">
+            {search.trim() ? 'Поиск не дал результатов.' : 'У вас пока нет активных диалогов с друзьями.'}
+          </p>
         </div>
       ) : (
         <div className="chats-list">
-          {sortedDialogs.map((dialog) => {
+          {filteredDialogs.map((dialog) => {
             const friend = dialog.friend || {}
             const lastMessage = dialog.last_message
             const lastIsMine = user?.id && lastMessage?.sender?.id === user.id
@@ -205,6 +249,11 @@ export default function Chats() {
                 <div className="chats-item-top">
                   <div className="chats-friend">
                     <span className={`friend-status-dot ${friend.is_online ? 'is-online' : ''}`} />
+                    {friend.avatar ? (
+                      <img src={friend.avatar} alt={friend.nickname} className="chats-avatar" />
+                    ) : (
+                      <span className="chats-avatar chats-avatar-fallback">{String(friend.nickname || '?').slice(0, 1).toUpperCase()}</span>
+                    )}
                     <strong>{friend.nickname || 'Пользователь'}</strong>
                   </div>
                   <span className="chats-time">{formatDialogTime(lastMessage?.created_at)}</span>

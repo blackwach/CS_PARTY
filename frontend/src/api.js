@@ -95,4 +95,5 @@ export const cs2 = {
   sync: () => api.post('/api/cs2/me/sync/', {}),
   health: () => api.get('/api/cs2/health/'),
   addFriendByInvite: (invite_link) => api.post('/api/cs2/friends/add/', { invite_link }),
+  submitSteamGuardCode: (code) => api.post('/api/cs2/guard/submit/', { code }),
 }

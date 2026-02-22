@@ -375,6 +375,11 @@ def get_cs2_stats_health() -> dict:
     # Подсказка: бэкенд видит учётные данные, а сервис бота — нет (часто из-за compose environment).
     last_err = (payload.get('bot') or {}).get('last_error') or ''
     creds_ok = health['bot_credentials'].get('username_set') and health['bot_credentials'].get('password_set')
+    guard_pending = (payload.get('bot') or {}).get('steam_guard_pending')
+    if guard_pending:
+        health['hint'] = (
+            'Steam Guard ожидает код. Откройте страницу состояния CS2-бота и отправьте код вручную.'
+        )
     if creds_ok and 'not set' in last_err.lower():
         health['hint'] = (
             'Логин/пароль заданы в backend/.env, но сервис бота их не видит. '
@@ -421,3 +426,40 @@ def add_friend_by_invite_link(invite_link: str) -> dict:
     result = dict(payload) if isinstance(payload, dict) else {}
     result.setdefault('steam_id', steam_id)
     return result
+
+
+def submit_steam_guard_code(code: str) -> dict:
+    api_url = str(settings.CS2_STATS_API_URL or '').strip().rstrip('/')
+    if not api_url:
+        raise ValueError('CS2_STATS_API_URL не задан.')
+
+    cleaned_code = str(code or '').strip().upper()
+    if not re.fullmatch(r'[A-Z0-9]{5}', cleaned_code):
+        raise ValueError('Некорректный код Steam Guard. Ожидалось 5 символов (буквы/цифры).')
+
+    headers = {}
+    if settings.CS2_STATS_API_TOKEN:
+        headers['Authorization'] = f"Bearer {settings.CS2_STATS_API_TOKEN}"
+
+    try:
+        response = requests.post(
+            f'{api_url}/bot/steam-guard',
+            headers=headers,
+            json={'code': cleaned_code},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(f'Не удалось обратиться к CS2 stats service: {exc}') from exc
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if not response.ok:
+        detail = payload.get('detail') or payload.get('error') or response.text or f'HTTP {response.status_code}'
+        if response.status_code in {400, 409}:
+            raise ValueError(str(detail))
+        raise RuntimeError(f'CS2 stats service вернул ошибку: {detail}')
+
+    return dict(payload) if isinstance(payload, dict) else {'ok': True}

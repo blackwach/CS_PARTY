@@ -73,7 +73,7 @@ async function fetchJsonOrText(url) {
   const timer = setTimeout(() => controller.abort(), 4500)
   try {
     const response = await fetch(url, { cache: 'no-store', signal: controller.signal })
-    if (!response.ok) throw new Error('request failed')
+    if (!response.ok) throw new Error('ошибка запроса')
     const contentType = response.headers.get('content-type') || ''
     if (contentType.includes('application/json')) {
       return await response.json()
@@ -104,7 +104,7 @@ async function detectPublicIp() {
   }
 
   if (fallback) return fallback
-  throw new Error('ip lookup failed')
+  throw new Error('не удалось определить IP')
 }
 
 export default function RoomDetail() {
@@ -290,7 +290,7 @@ export default function RoomDetail() {
       setDiagnostics(data)
       return data
     } catch (err) {
-      setError(err.response?.data?.detail || 'Не удалось выполнить диагностику host-auto.')
+      setError(err.response?.data?.detail || 'Не удалось выполнить диагностику авто-хоста.')
       return null
     } finally {
       setDiagnosticsLoading(false)
@@ -325,7 +325,7 @@ export default function RoomDetail() {
 
     const diag = await runDiagnostics(resolvedIp)
     if (diag?.errors?.length) {
-      setError(diag.errors[0] || 'Диагностика host-auto не пройдена.')
+      setError(diag.errors[0] || 'Диагностика авто-хоста не пройдена.')
       return
     }
 
@@ -361,7 +361,7 @@ export default function RoomDetail() {
         <p className="card-meta">
           Код: {room?.code} | {formatDate(room?.scheduled_for)}
         </p>
-        <p className="room-realtime-status">{roomWsConnected ? 'Комната: realtime подключена' : 'Комната: fallback-обновление'}</p>
+        <p className="room-realtime-status">{roomWsConnected ? 'Комната: обновление в реальном времени' : 'Комната: резервное обновление'}</p>
       </div>
       {error && <div className="alert alert-error">{error}</div>}
 
@@ -418,7 +418,7 @@ export default function RoomDetail() {
                 onClick={() => runDiagnostics()}
                 disabled={diagnosticsLoading || actionLoading}
               >
-                {diagnosticsLoading ? 'Проверяем...' : 'Проверить host-auto'}
+                {diagnosticsLoading ? 'Проверяем...' : 'Проверить авто-хост'}
               </button>
             </div>
             <p className="form-hint">
@@ -429,7 +429,7 @@ export default function RoomDetail() {
 
         {diagnostics && (
           <div className="room-diagnostics-box">
-            <h3>Диагностика host-auto</h3>
+            <h3>Диагностика авто-хоста</h3>
             {diagnostics.errors?.length > 0 && (
               <div className="alert alert-error room-diagnostics-alert">{diagnostics.errors.join(' ')}</div>
             )}
@@ -439,7 +439,7 @@ export default function RoomDetail() {
             <ul className="room-diagnostics-list">
               {(diagnostics.checks || []).map((item, index) => (
                 <li key={`${item.name || index}-${index}`} className={`room-diagnostics-item is-${item.status || 'warning'}`}>
-                  <strong>{item.name || 'check'}:</strong> {item.detail || '-'}
+                  <strong>{item.name || 'Проверка'}:</strong> {item.detail || '-'}
                 </li>
               ))}
             </ul>
