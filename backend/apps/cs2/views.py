@@ -1,7 +1,7 @@
 ﻿from rest_framework import response, views
 
 from .serializers import PlayerStatsSerializer
-from .services import sync_cs2_stats_for_user
+from .services import get_cs2_stats_health, sync_cs2_stats_for_user
 
 
 class MyCS2StatsView(views.APIView):
@@ -28,3 +28,8 @@ class SyncMyCS2StatsView(views.APIView):
     def post(self, request):
         stats = sync_cs2_stats_for_user(request.user)
         return response.Response(PlayerStatsSerializer(stats).data)
+
+
+class CS2StatsHealthView(views.APIView):
+    def get(self, request):
+        return response.Response(get_cs2_stats_health())

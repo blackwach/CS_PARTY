@@ -73,10 +73,16 @@ export default function CS2Stats() {
     <>
       <div className="cs2-stats-head">
         <h1 className="page-title">Статистика CS2</h1>
-        <button type="button" className="btn btn-primary" onClick={sync} disabled={syncing}>
-          {syncing ? 'Синхронизация...' : 'Синхронизировать'}
-        </button>
+        <div className="cs2-stats-actions">
+          <button type="button" className="btn btn-primary" onClick={sync} disabled={syncing}>
+            {syncing ? 'Синхронизация...' : 'Синхронизировать'}
+          </button>
+          <Link to="/cs2/health" className="btn btn-secondary">
+            Health бота
+          </Link>
+        </div>
       </div>
+
       {error && <div className="alert alert-error">{error}</div>}
       {stats?.note && <div className="alert alert-warning">{stats.note}</div>}
 
@@ -94,7 +100,7 @@ export default function CS2Stats() {
           </p>
         ) : (
           <p className="cs2-profile-link">
-            Укажите ссылку на Steam-профиль в <Link to="/profile">профиле</Link>, затем нажмите «Синхронизировать».
+            Укажите ссылку на Steam-профиль в <Link to="/profile">профиле</Link>, затем нажмите "Синхронизировать".
           </p>
         )}
       </div>
@@ -103,7 +109,7 @@ export default function CS2Stats() {
         <div className="panel">
           <p className="cs2-empty-hint">
             {steamProfileUrl
-              ? 'Нажмите «Синхронизировать», чтобы обновить доступные данные.'
+              ? 'Нажмите "Синхронизировать", чтобы обновить доступные данные.'
               : 'Добавьте Steam-профиль и выполните первую синхронизацию.'}
           </p>
         </div>
@@ -129,7 +135,9 @@ export default function CS2Stats() {
                 <div className="stat-label">Матчей</div>
               </div>
             </div>
-            <p className="cs2-updated-at">Обновлено: {formatDate(stats.last_synced_at)}</p>
+            <p className="cs2-updated-at">
+              Обновлено: {formatDate(stats.last_synced_at)} | Источник: {stats.source || 'unknown'}
+            </p>
           </div>
 
           {stats.recent_matches?.length > 0 && (
@@ -144,13 +152,11 @@ export default function CS2Stats() {
                     <span className="cs2-match-stats">
                       K/D/A: {item.kills ?? 0}/{item.deaths ?? 0}/{item.assists ?? 0}
                       {item.result != null && (
-                        <span className={`badge ${
-                          item.result === 'win'
-                            ? 'badge-joined'
-                            : item.result === 'draw'
-                              ? 'badge-invited'
-                              : 'badge-declined'
-                        }`}>
+                        <span
+                          className={`badge ${
+                            item.result === 'win' ? 'badge-joined' : item.result === 'draw' ? 'badge-invited' : 'badge-declined'
+                          }`}
+                        >
                           {RESULT_LABELS[item.result] || 'Матч'}
                         </span>
                       )}

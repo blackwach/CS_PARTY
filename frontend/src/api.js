@@ -87,9 +87,11 @@ export const rooms = {
   unready: (code) => api.post(`/api/rooms/${code}/unready/`),
   decline: (code) => api.post(`/api/rooms/${code}/decline/`),
   close: (code) => api.post(`/api/rooms/${code}/close/`),
+  diagnostics: (code, data = {}) => api.post(`/api/rooms/${code}/diagnostics/`, data),
 }
 
 export const cs2 = {
   getStats: () => api.get('/api/cs2/me/stats/'),
   sync: () => api.post('/api/cs2/me/sync/', {}),
+  health: () => api.get('/api/cs2/health/'),
 }

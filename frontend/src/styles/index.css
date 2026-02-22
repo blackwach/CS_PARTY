@@ -389,6 +389,10 @@ input, button, select, textarea {
 
 .notification-wrap {
   position: relative;
+  z-index: 70;
+}
+.notification-backdrop {
+  display: none;
 }
 .notification-btn {
   position: relative;
@@ -434,7 +438,16 @@ input, button, select, textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
+   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+.notification-popover-controls {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+.notification-close-btn {
+  display: none;
 }
 .notification-list {
   list-style: none;
@@ -467,6 +480,9 @@ input, button, select, textarea {
 .notification-empty {
   color: var(--text-muted);
   margin: 0.35rem 0;
+}
+.notification-error {
+  margin-bottom: 0.35rem;
 }
 
 .friends-toggle-btn {
@@ -679,8 +695,18 @@ input, button, select, textarea {
   flex-wrap: wrap;
 }
 
+.chat-topbar {
+  margin-bottom: 0.85rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
 .chat-panel {
   max-width: 50rem;
+}
+.chat-panel-updated {
+  padding: 0.9rem;
 }
 .chat-transport-status {
   color: var(--text-muted);
@@ -693,25 +719,54 @@ input, button, select, textarea {
 .chat-presence.is-online {
   color: var(--success);
 }
+.chat-typing {
+  color: var(--accent-cyan);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.chat-messages-wrap {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(12, 18, 26, 0.65);
+  margin-bottom: 0.75rem;
+}
 .chat-messages {
-  max-height: 28rem;
+  max-height: min(60vh, 34rem);
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  gap: 0.55rem;
+  padding: 0.7rem;
+}
+.chat-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 1.2rem 0.6rem;
+}
+.chat-row {
+  display: flex;
+}
+.chat-row.is-mine {
+  justify-content: flex-end;
 }
 .chat-bubble {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.55rem 0.65rem;
   background: var(--bg-elevated);
+  max-width: min(86%, 40rem);
 }
 .chat-bubble.is-mine {
   border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(28, 42, 30, 0.45);
 }
 .chat-bubble.is-pending {
   opacity: 0.75;
+}
+.chat-bubble.is-failed {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(69, 23, 23, 0.45);
 }
 .chat-bubble-head {
   display: flex;
@@ -721,19 +776,258 @@ input, button, select, textarea {
   color: var(--text-muted);
   font-size: 0.8rem;
 }
+.chat-bubble-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .chat-pending-label {
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+.chat-failed-row {
+  margin-top: 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.chat-failed-text {
+  color: #fca5a5;
+  font-size: 0.82rem;
+}
+.chat-failed-row .btn {
+  padding: 0.28rem 0.55rem;
+  font-size: 0.82rem;
 }
 .chat-read-state {
   margin-top: 0.3rem;
   color: var(--text-muted);
   font-size: 0.78rem;
 }
+.chat-jump-btn {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  z-index: 2;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+}
 .chat-form {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 0.5rem;
+}
+.chats-head {
+  margin-bottom: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.chats-head .page-title {
+  margin: 0;
+}
+.chats-subtitle {
+  margin: 0.3rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.chats-head-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.chats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.chats-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  color: var(--text);
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+.chats-item:hover {
+  border-color: rgba(34, 197, 94, 0.45);
+  box-shadow: var(--shadow-glow);
+}
+.chats-item:active {
+  transform: translateY(1px);
+}
+.chats-item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.4rem;
+}
+.chats-friend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.chats-friend strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chats-time {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.chats-item-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.55rem;
+}
+.chats-preview {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chats-unread {
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--accent);
+  color: #0a0e14;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.chats-empty {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.room-detail-head {
+  margin-bottom: 1rem;
+}
+.room-detail-head .btn {
+  margin-bottom: 0.5rem;
+}
+.room-realtime-status {
+  margin: 0.45rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-family: var(--font-mono);
+}
+.room-detail-panel {
+  display: grid;
+  gap: 0.95rem;
+}
+.room-detail-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.room-detail-host {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.room-detail-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.room-host-ip-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 0.75rem;
+}
+.room-host-ip-box label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}
+.room-host-ip-box input {
+  width: 100%;
+}
+.room-diagnostics-actions {
+  margin-top: 0.65rem;
+}
+.room-diagnostics-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  padding: 0.75rem;
+}
+.room-diagnostics-box h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+.room-diagnostics-alert {
+  margin-bottom: 0.55rem;
+}
+.room-diagnostics-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.room-diagnostics-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.55rem;
+  background: rgba(10, 14, 20, 0.45);
+}
+.room-diagnostics-item.is-ok {
+  border-color: rgba(34, 197, 94, 0.45);
+}
+.room-diagnostics-item.is-warning {
+  border-color: rgba(249, 115, 22, 0.45);
+}
+.room-diagnostics-item.is-error {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+.room-server-meta {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.room-players-title {
+  margin: 0;
+  font-size: 1rem;
+}
+.room-player-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.room-player-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.52rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.room-player-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.room-player-chat {
+  padding: 0.15rem 0.4rem;
 }
 
 .room-create-form {
@@ -849,6 +1143,11 @@ input, button, select, textarea {
 .cs2-stats-head .page-title {
   margin: 0;
 }
+.cs2-stats-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
 .cs2-player-card {
   margin-bottom: 1rem;
 }
@@ -901,6 +1200,43 @@ input, button, select, textarea {
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+.cs2-health-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+.cs2-health-head .page-title {
+  margin: 0;
+}
+.cs2-health-head-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.cs2-health-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+.cs2-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+.cs2-health-url {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.cs2-health-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.cs2-health-list li {
+  margin-bottom: 0.35rem;
+}
 
 @media (max-width: 1100px) {
   .app-layout.has-friends .main {
@@ -940,9 +1276,41 @@ input, button, select, textarea {
   .card {
     padding: 0.85rem 1rem;
   }
+  .notification-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    background: rgba(2, 7, 14, 0.5);
+    z-index: 70;
+  }
   .notification-popover {
-    width: min(26rem, 96vw);
+    position: fixed;
+    left: 0;
     right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100vw;
+    max-height: 84dvh;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    border-radius: 16px 16px 0 0;
+    padding: 0.9rem 0.75rem calc(0.9rem + env(safe-area-inset-bottom));
+    z-index: 71;
+  }
+  .notification-popover-head {
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
+  .notification-popover-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .notification-close-btn {
+    display: inline-flex;
   }
   .friends-panel {
     top: 0;
@@ -998,7 +1366,61 @@ input, button, select, textarea {
     flex-direction: column;
     align-items: flex-start;
   }
+  .chat-messages {
+    max-height: 60dvh;
+    padding: 0.6rem;
+  }
+  .chat-bubble {
+    max-width: 100%;
+  }
+  .chat-jump-btn {
+    left: 0.6rem;
+    right: 0.6rem;
+    width: auto;
+  }
   .chat-form {
     grid-template-columns: 1fr;
+  }
+  .chat-failed-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .chat-failed-row .btn {
+    width: 100%;
+  }
+  .chats-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .chats-head-actions .btn {
+    width: 100%;
+  }
+  .chats-item-top {
+    align-items: flex-start;
+  }
+  .chats-item-bottom {
+    align-items: flex-start;
+  }
+  .chats-preview {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+  .cs2-stats-actions .btn {
+    width: 100%;
+  }
+  .cs2-health-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cs2-health-head-actions .btn {
+    width: 100%;
+  }
+  .room-detail-actions .btn {
+    width: 100%;
+  }
+  .room-player-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

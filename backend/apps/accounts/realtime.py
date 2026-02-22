@@ -15,6 +15,10 @@ def chat_group_name(user_a_id: int, user_b_id: int) -> str:
     return f'chat_{low_id}_{high_id}'
 
 
+def dialogs_group_name(user_id: int) -> str:
+    return f'dialogs_{int(user_id)}'
+
+
 def broadcast_chat_message(message) -> None:
     channel_layer = get_channel_layer()
     if channel_layer is None:
@@ -95,3 +99,41 @@ def broadcast_chat_read(*, conversation, reader_id: int, message_ids: list[int],
         )
     except Exception as exc:  # pragma: no cover - best-effort realtime
         logger.warning('Chat read-receipt broadcast skipped: %s', exc)
+
+
+def broadcast_chat_typing(*, conversation, user_id: int, is_typing: bool) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    group = chat_group_name(conversation.user_low_id, conversation.user_high_id)
+    try:
+        async_to_sync(channel_layer.group_send)(
+            group,
+            {
+                'type': 'chat.typing',
+                'payload': {
+                    'user_id': int(user_id),
+                    'is_typing': bool(is_typing),
+                },
+            },
+        )
+    except Exception as exc:  # pragma: no cover - best-effort realtime
+        logger.warning('Chat typing broadcast skipped: %s', exc)
+
+
+def broadcast_dialogs_refresh(*, user_id: int, reason: str = 'message') -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    try:
+        async_to_sync(channel_layer.group_send)(
+            dialogs_group_name(user_id),
+            {
+                'type': 'dialogs.refresh',
+                'payload': {
+                    'reason': reason,
+                },
+            },
+        )
+    except Exception as exc:  # pragma: no cover - best-effort realtime
+        logger.warning('Dialogs realtime broadcast skipped: %s', exc)

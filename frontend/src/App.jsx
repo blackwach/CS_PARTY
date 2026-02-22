@@ -13,7 +13,9 @@ import Rooms from './pages/Rooms'
 import RoomDetail from './pages/RoomDetail'
 import CreateRoom from './pages/CreateRoom'
 import CS2Stats from './pages/CS2Stats'
+import CS2Health from './pages/CS2Health'
 import Chat from './pages/Chat'
+import Chats from './pages/Chats'
 import Home from './pages/Home'
 
 function ProtectedRoute({ children }) {
@@ -55,11 +57,13 @@ export default function App() {
         <Route path="delete-account/:token" element={<DeleteAccountConfirm />} />
         <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="users/:id" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+        <Route path="chats" element={<ProtectedRoute><Chats /></ProtectedRoute>} />
         <Route path="chat/:userId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
         <Route path="rooms" element={<ProtectedRoute><Rooms /></ProtectedRoute>} />
         <Route path="rooms/create" element={<ProtectedRoute><CreateRoom /></ProtectedRoute>} />
         <Route path="rooms/:code" element={<ProtectedRoute><RoomDetail /></ProtectedRoute>} />
         <Route path="cs2" element={<ProtectedRoute><CS2Stats /></ProtectedRoute>} />
+        <Route path="cs2/health" element={<ProtectedRoute><CS2Health /></ProtectedRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

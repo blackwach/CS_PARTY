@@ -233,3 +233,50 @@ def sync_cs2_stats_for_user(user):
         )
 
     return stats
+
+
+def get_cs2_stats_health() -> dict:
+    api_url = str(settings.CS2_STATS_API_URL or '').strip().rstrip('/')
+    health = {
+        'configured': bool(api_url),
+        'api_url': api_url,
+        'api_token_configured': bool(settings.CS2_STATS_API_TOKEN),
+        'bot_credentials': {
+            'username_set': bool(getattr(settings, 'CS2_STATS_STEAM_USERNAME', '')),
+            'password_set': bool(getattr(settings, 'CS2_STATS_STEAM_PASSWORD', '')),
+            'two_factor_set': bool(getattr(settings, 'CS2_STATS_STEAM_2FA_SECRET', '')),
+        },
+        'service_reachable': False,
+        'service_status_code': None,
+        'service': None,
+        'error': '',
+    }
+
+    if not api_url:
+        health['error'] = 'CS2_STATS_API_URL не задан.'
+        return health
+
+    headers = {}
+    if settings.CS2_STATS_API_TOKEN:
+        headers['Authorization'] = f"Bearer {settings.CS2_STATS_API_TOKEN}"
+
+    try:
+        response = requests.get(f'{api_url}/health', headers=headers, timeout=10)
+    except requests.RequestException as exc:
+        health['error'] = f'Не удалось обратиться к CS2 stats service: {exc}'
+        return health
+
+    health['service_status_code'] = response.status_code
+    if not response.ok:
+        health['error'] = f'CS2 stats service вернул HTTP {response.status_code}.'
+        return health
+
+    try:
+        payload = response.json()
+    except ValueError:
+        health['error'] = 'CS2 stats service вернул некорректный JSON на /health.'
+        return health
+
+    health['service_reachable'] = True
+    health['service'] = payload
+    return health

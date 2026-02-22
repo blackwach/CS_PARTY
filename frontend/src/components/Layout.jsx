@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import FriendsPanel from './FriendsPanel'
 import NotificationBell from './NotificationBell'
@@ -15,17 +15,22 @@ export default function Layout() {
   const { pathname } = useLocation()
   const [friendsOpen, setFriendsOpen] = useState(defaultFriendsPanelState)
 
-  const pageVariant = pathname.startsWith('/login') || pathname.startsWith('/register') || pathname.startsWith('/forgot-password') || pathname.startsWith('/reset-password') || pathname.startsWith('/verify-email')
-    ? 'auth'
-    : pathname.startsWith('/rooms')
-      ? 'rooms'
-      : pathname.startsWith('/profile') || pathname.startsWith('/users')
-        ? 'profile'
-        : pathname.startsWith('/chat')
-          ? 'rooms'
-          : pathname.startsWith('/cs2')
-            ? 'cs2'
-            : 'home'
+  const pageVariant =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/reset-password') ||
+    pathname.startsWith('/verify-email')
+      ? 'auth'
+      : pathname.startsWith('/rooms')
+        ? 'rooms'
+        : pathname.startsWith('/profile') || pathname.startsWith('/users')
+          ? 'profile'
+          : pathname.startsWith('/chat') || pathname.startsWith('/chats')
+            ? 'rooms'
+            : pathname.startsWith('/cs2')
+              ? 'cs2'
+              : 'home'
 
   const handleLogout = () => {
     logout()
@@ -42,6 +47,7 @@ export default function Layout() {
           {isAuthenticated ? (
             <>
               <Link to="/rooms">Комнаты</Link>
+              <Link to="/chats">Чаты</Link>
               <Link to="/rooms/create">Создать</Link>
               <Link to="/cs2">CS2</Link>
               <Link to="/profile">Профиль</Link>
@@ -49,7 +55,9 @@ export default function Layout() {
                 Друзья
               </button>
               <NotificationBell />
-              <button type="button" onClick={handleLogout}>Выйти</button>
+              <button type="button" onClick={handleLogout}>
+                Выйти
+              </button>
             </>
           ) : (
             <>
@@ -62,9 +70,7 @@ export default function Layout() {
       <main className="main">
         <Outlet />
       </main>
-      {isAuthenticated && (
-        <FriendsPanel isVisible={friendsOpen} onClose={() => setFriendsOpen(false)} />
-      )}
+      {isAuthenticated && <FriendsPanel isVisible={friendsOpen} onClose={() => setFriendsOpen(false)} />}
     </div>
   )
 }

@@ -1,4 +1,6 @@
 import logging
+import re
+import ipaddress
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -17,6 +19,55 @@ from .server_provisioning import (
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+MAP_NAME_PATTERN = re.compile(r'^[A-Za-z0-9_./-]{3,64}$')
+
+
+def _sanitize_cs2_map_name(value: str) -> str:
+    candidate = str(value or '').strip()
+    if MAP_NAME_PATTERN.fullmatch(candidate):
+        return candidate
+    return 'de_dust2'
+
+
+def _schedule_room_broadcast(room_id: int) -> None:
+    from .realtime import broadcast_room_state
+
+    transaction.on_commit(lambda: broadcast_room_state(room_id))
+
+
+def _parse_ip(value: str):
+    candidate = str(value or '').strip()
+    if not candidate:
+        return None
+    try:
+        return ipaddress.ip_address(candidate)
+    except ValueError:
+        return None
+
+
+def _is_likely_public_ip(ip_obj) -> bool:
+    if not ip_obj:
+        return False
+    return not (
+        ip_obj.is_private
+        or ip_obj.is_loopback
+        or ip_obj.is_link_local
+        or ip_obj.is_multicast
+        or ip_obj.is_reserved
+        or ip_obj.is_unspecified
+    )
+
+
+def _validate_host_public_ip(host_public_ip: str) -> str:
+    normalized = str(host_public_ip or '').strip()
+    if not normalized:
+        raise ValidationError('Укажите публичный IP хоста для host-auto режима.')
+
+    parsed = _parse_ip(normalized)
+    if not parsed:
+        raise ValidationError('Публичный IP хоста имеет некорректный формат.')
+
+    return normalized
 
 
 def _validate_invite_permissions(host: User, invited_user: User) -> None:
@@ -83,6 +134,7 @@ def create_room_with_invites(
             provider_payload={'source': 'host'},
         )
 
+    _schedule_room_broadcast(room.id)
     return room
 
 
@@ -103,6 +155,7 @@ def join_room(room: GameRoom, user: User, via: str = RoomMembership.VIA_WEB) -> 
 
     membership.joined_via = via
     membership.save(update_fields=['state', 'joined_via', 'updated_at'])
+    _schedule_room_broadcast(room.id)
     return membership
 
 
@@ -115,6 +168,7 @@ def decline_room(room: GameRoom, user: User) -> RoomMembership:
     membership.ready_at = None
     membership.save(update_fields=['state', 'ready_at', 'updated_at'])
     _sync_room_status(room)
+    _schedule_room_broadcast(room.id)
     return membership
 
 
@@ -142,12 +196,15 @@ def set_member_ready(
 
     provider_source = str((room.server_provider_payload or {}).get('source') or '')
     host_public_ip = (host_public_ip or '').strip()
-    if provider_source == 'host-auto' and user.id == room.host_id and host_public_ip:
-        room.server_host = host_public_ip
+    if provider_source == 'host-auto' and user.id == room.host_id:
+        resolved_ip = host_public_ip or str(room.server_host or '').strip()
+        resolved_ip = _validate_host_public_ip(resolved_ip)
+        room.server_host = resolved_ip
         room.server_error = ''
         room.save(update_fields=['server_host', 'server_error', 'updated_at'])
 
     _sync_room_status(room)
+    _schedule_room_broadcast(room.id)
     return membership
 
 
@@ -166,6 +223,7 @@ def set_member_unready(room: GameRoom, user: User, via: str = RoomMembership.VIA
     membership.ready_at = None
     membership.save(update_fields=['state', 'joined_via', 'ready_at', 'updated_at'])
     _sync_room_status(room)
+    _schedule_room_broadcast(room.id)
     return membership
 
 
@@ -180,6 +238,7 @@ def close_room(room: GameRoom, user: User) -> GameRoom:
     room.status = GameRoom.STATUS_CANCELLED
     room.save(update_fields=['status', 'updated_at'])
     release_server_for_room(room)
+    _schedule_room_broadcast(room.id)
     return room
 
 
@@ -187,7 +246,7 @@ def _configure_host_auto_room_server(room: GameRoom) -> None:
     host = (room.server_host or '').strip()
     port = int(room.server_port or 0)
     password = (room.server_password or '').strip()
-    room_map = str((room.server_provider_payload or {}).get('map') or 'de_dust2').strip() or 'de_dust2'
+    room_map = _sanitize_cs2_map_name((room.server_provider_payload or {}).get('map') or 'de_dust2')
 
     if not host:
         raise ValidationError('Публичный IP хоста не задан. Хост должен нажать "Готов" в веб-клиенте.')
@@ -197,19 +256,39 @@ def _configure_host_auto_room_server(room: GameRoom) -> None:
     connect_command = build_connect_command(host, port, password)
     connect_url = build_steam_launch_url(connect_command)
 
-    launch_parts = [f'+map {room_map}', '+sv_lan 0', f'+port {port}']
+    # Host auto mode should launch CS2 straight into an internet listen server.
+    launch_parts = [
+        '+game_type 0',
+        '+game_mode 1',
+        f'+map {room_map}',
+        '+sv_lan 0',
+        f'+port {port}',
+        f'+net_public_adr {host}',
+    ]
     if password:
         launch_parts.append(f'+sv_password {password}')
+
+    provider_payload = dict(room.server_provider_payload or {})
+    provider_payload.update(
+        {
+            'source': 'host-auto',
+            'map': room_map,
+            'host_public_ip': host,
+            'host_port': port,
+        }
+    )
 
     room.server_connect_url = connect_url
     room.server_launch_command = ' '.join(launch_parts)
     room.server_error = ''
+    room.server_provider_payload = provider_payload
     room.server_provisioned_at = room.server_provisioned_at or timezone.now()
     room.save(
         update_fields=[
             'server_connect_url',
             'server_launch_command',
             'server_error',
+            'server_provider_payload',
             'server_provisioned_at',
             'updated_at',
         ]
@@ -251,6 +330,77 @@ def _sync_room_status(room: GameRoom) -> None:
     if room.status != GameRoom.STATUS_OPEN:
         room.status = GameRoom.STATUS_OPEN
         room.save(update_fields=['status', 'updated_at'])
+
+
+def diagnose_host_auto_start(room: GameRoom, user: User, host_public_ip: str = '') -> dict:
+    source = str((room.server_provider_payload or {}).get('source') or '')
+    errors: list[str] = []
+    warnings: list[str] = []
+    checks: list[dict] = []
+
+    if source != 'host-auto':
+        errors.append('Комната не использует host-auto режим.')
+
+    if user.id != room.host_id:
+        errors.append('Диагностика host-auto доступна только хосту комнаты.')
+
+    port = int(room.server_port or 0)
+    if 1 <= port <= 65535:
+        checks.append({'name': 'port', 'status': 'ok', 'detail': f'Порт сервера: {port}.'})
+    else:
+        errors.append('Порт host-auto сервера не настроен или вне диапазона 1-65535.')
+        checks.append({'name': 'port', 'status': 'error', 'detail': 'Порт невалидный.'})
+
+    candidate_ip = str(host_public_ip or room.server_host or '').strip()
+    if not candidate_ip:
+        errors.append('Публичный IP хоста не задан.')
+        checks.append({'name': 'host_public_ip', 'status': 'error', 'detail': 'IP отсутствует.'})
+    else:
+        parsed_ip = _parse_ip(candidate_ip)
+        if not parsed_ip:
+            errors.append('Публичный IP хоста имеет некорректный формат.')
+            checks.append({'name': 'host_public_ip', 'status': 'error', 'detail': f'IP "{candidate_ip}" не распознан.'})
+        elif _is_likely_public_ip(parsed_ip):
+            checks.append({'name': 'host_public_ip', 'status': 'ok', 'detail': f'Используется публичный IP: {candidate_ip}.'})
+        else:
+            warnings.append('Указанный IP не выглядит публичным. Для игры через интернет нужен внешний IP и проброс порта.')
+            checks.append(
+                {
+                    'name': 'host_public_ip',
+                    'status': 'warning',
+                    'detail': f'IP "{candidate_ip}" валиден, но не является публичным.',
+                }
+            )
+
+    active_count = room.memberships.exclude(state=RoomMembership.STATE_DECLINED).count()
+    ready_count = room.memberships.filter(state=RoomMembership.STATE_READY).count()
+    all_ready = active_count > 0 and active_count == ready_count
+    checks.append(
+        {
+            'name': 'readiness',
+            'status': 'ok' if all_ready else 'warning',
+            'detail': f'Готовы {ready_count} из {active_count} активных участников.',
+        }
+    )
+
+    can_start = not errors and all_ready
+    if can_start:
+        checks.append({'name': 'start', 'status': 'ok', 'detail': 'Комната готова к автоматическому запуску CS2.'})
+    else:
+        checks.append({'name': 'start', 'status': 'warning', 'detail': 'Перед стартом исправьте ошибки и дождитесь готовности всех игроков.'})
+
+    return {
+        'room_code': room.code,
+        'mode': source or 'unknown',
+        'status': room.status,
+        'active_members': active_count,
+        'ready_members': ready_count,
+        'host_public_ip': candidate_ip,
+        'can_start': can_start,
+        'errors': errors,
+        'warnings': warnings,
+        'checks': checks,
+    }
 
 
 def mark_member_ready_by_telegram(chat_id: int, room_code: str) -> tuple[bool, str]:

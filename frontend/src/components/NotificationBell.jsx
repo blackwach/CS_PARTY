@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { auth as authApi, getWsBase, rooms as roomsApi } from '../api'
 
 export default function NotificationBell() {
   const [items, setItems] = useState([])
   const [open, setOpen] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const wrapRef = useRef(null)
 
-  const loadNotifications = () => {
+  const loadNotifications = useCallback(() => {
     authApi
       .notifications()
       .then((res) => setItems(Array.isArray(res.data) ? res.data : []))
       .catch(() => setItems([]))
-  }
+  }, [])
 
   useEffect(() => {
     loadNotifications()
@@ -51,9 +53,51 @@ export default function NotificationBell() {
       clearInterval(pollId)
       if (socket) socket.close()
     }
-  }, [])
+  }, [loadNotifications])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handlePointer = (event) => {
+      if (!wrapRef.current) return
+      if (!wrapRef.current.contains(event.target)) setOpen(false)
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+
+    document.addEventListener('mousedown', handlePointer)
+    document.addEventListener('touchstart', handlePointer)
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointer)
+      document.removeEventListener('touchstart', handlePointer)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return undefined
+    if (window.innerWidth > 700) return undefined
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [open])
 
   const unreadCount = useMemo(() => items.filter((i) => !i.is_read).length, [items])
+
+  const handleAction = async (fn) => {
+    setActionError('')
+    try {
+      await fn()
+    } catch (err) {
+      setActionError(err.response?.data?.detail || 'Не удалось выполнить действие.')
+    }
+  }
 
   const markAsRead = async (notificationId) => {
     await authApi.notificationRead(notificationId)
@@ -93,19 +137,38 @@ export default function NotificationBell() {
   }
 
   return (
-    <div className="notification-wrap">
-      <button type="button" className="notification-btn" onClick={() => setOpen((v) => !v)} aria-label="Уведомления">
-        <span className="notification-icon">🔔</span>
+    <div className={`notification-wrap ${open ? 'is-open' : ''}`} ref={wrapRef}>
+      {open && <button type="button" className="notification-backdrop" aria-label="Закрыть уведомления" onClick={() => setOpen(false)} />}
+      <button
+        type="button"
+        className="notification-btn"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Уведомления"
+        aria-expanded={open}
+      >
+        <span className="notification-icon" aria-hidden="true">🔔</span>
         {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
       </button>
       {open && (
-        <div className="notification-popover">
+        <div className="notification-popover" role="dialog" aria-label="Уведомления">
           <div className="notification-popover-head">
             <strong>Уведомления</strong>
-            <button type="button" className="btn btn-ghost" onClick={() => authApi.notificationsReadAll().then(loadNotifications)}>
-              Прочитать все
-            </button>
+            <div className="notification-popover-controls">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => handleAction(async () => authApi.notificationsReadAll().then(loadNotifications))}
+              >
+                Прочитать все
+              </button>
+              <button type="button" className="btn btn-ghost notification-close-btn" onClick={() => setOpen(false)}>
+                Закрыть
+              </button>
+            </div>
           </div>
+
+          {actionError && <div className="alert alert-error notification-error">{actionError}</div>}
+
           {items.length === 0 ? (
             <p className="notification-empty">Уведомлений нет.</p>
           ) : (
@@ -118,20 +181,32 @@ export default function NotificationBell() {
                   </div>
                   {notification.type === 'friend_request' && !notification.is_read && (
                     <div className="notification-actions">
-                      <button type="button" className="btn btn-primary" onClick={() => acceptFriend(notification)}>Принять</button>
-                      <button type="button" className="btn btn-secondary" onClick={() => declineFriend(notification)}>Отклонить</button>
+                      <button type="button" className="btn btn-primary" onClick={() => handleAction(() => acceptFriend(notification))}>
+                        Принять
+                      </button>
+                      <button type="button" className="btn btn-secondary" onClick={() => handleAction(() => declineFriend(notification))}>
+                        Отклонить
+                      </button>
                     </div>
                   )}
                   {notification.type === 'room_invite' && (
                     <div className="notification-actions">
-                      <button type="button" className="btn btn-primary" onClick={() => acceptRoomInvite(notification)}>Войти</button>
-                      <button type="button" className="btn btn-secondary" onClick={() => declineRoomInvite(notification)}>Отклонить</button>
-                      <Link to={`/rooms/${notification.payload?.room_code || ''}`}>Открыть</Link>
+                      <button type="button" className="btn btn-primary" onClick={() => handleAction(() => acceptRoomInvite(notification))}>
+                        Войти
+                      </button>
+                      <button type="button" className="btn btn-secondary" onClick={() => handleAction(() => declineRoomInvite(notification))}>
+                        Отклонить
+                      </button>
+                      <Link to={`/rooms/${notification.payload?.room_code || ''}`} onClick={() => setOpen(false)}>
+                        Открыть
+                      </Link>
                     </div>
                   )}
                   {notification.type !== 'friend_request' && notification.type !== 'room_invite' && !notification.is_read && (
                     <div className="notification-actions">
-                      <button type="button" className="btn btn-secondary" onClick={() => markAsRead(notification.id)}>Прочитать</button>
+                      <button type="button" className="btn btn-secondary" onClick={() => handleAction(() => markAsRead(notification.id))}>
+                        Прочитать
+                      </button>
                     </div>
                   )}
                 </li>

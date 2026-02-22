@@ -10,7 +10,12 @@ from rest_framework.exceptions import ValidationError
 
 from apps.notifications.models import InAppNotification
 from apps.notifications.services import create_notification
-from .realtime import broadcast_chat_message, broadcast_chat_read
+from .realtime import (
+    broadcast_chat_message,
+    broadcast_chat_read,
+    broadcast_chat_typing,
+    broadcast_dialogs_refresh,
+)
 from .models import (
     DirectConversation,
     DirectMessage,
@@ -402,6 +407,8 @@ def mark_direct_messages_as_read(reader: User, peer: User) -> list[int]:
         message_ids=unread_ids,
         read_at=read_at,
     )
+    broadcast_dialogs_refresh(user_id=reader.id, reason='read')
+    broadcast_dialogs_refresh(user_id=peer.id, reason='read')
     return unread_ids
 
 
@@ -415,7 +422,18 @@ def send_direct_message(sender: User, recipient: User, text: str) -> DirectMessa
     message = DirectMessage.objects.create(conversation=conversation, sender=sender, text=text.strip())
     conversation.save(update_fields=['updated_at'])
     broadcast_chat_message(message)
+    broadcast_dialogs_refresh(user_id=sender.id, reason='message')
+    broadcast_dialogs_refresh(user_id=recipient.id, reason='message')
     return message
+
+
+def send_direct_typing_state(sender: User, recipient: User, is_typing: bool) -> None:
+    if sender.id == recipient.id:
+        return
+    if not are_friends(sender, recipient):
+        raise ValidationError('Чат доступен только между друзьями.')
+    conversation = get_or_create_direct_conversation(sender, recipient)
+    broadcast_chat_typing(conversation=conversation, user_id=sender.id, is_typing=bool(is_typing))
 
 
 def get_user_friendships(user: User):
