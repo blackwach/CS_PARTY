@@ -529,6 +529,24 @@ function buildSearchCommand() {
   return parts.join(' ');
 }
 
+function buildSearchCommands() {
+  const commands = [];
+  const strict = buildSearchCommand();
+  if (strict) commands.push(strict);
+
+  // Some IMAP providers reject complex SEARCH criteria; keep a broad fallback.
+  commands.push('UID SEARCH ALL');
+
+  if (STEAM_EMAIL_FROM_FILTER) {
+    commands.push(`UID SEARCH ALL FROM ${imapQuote(STEAM_EMAIL_FROM_FILTER)}`);
+  }
+  if (STEAM_EMAIL_SUBJECT_FILTER) {
+    commands.push(`UID SEARCH ALL SUBJECT ${imapQuote(STEAM_EMAIL_SUBJECT_FILTER)}`);
+  }
+
+  return [...new Set(commands)];
+}
+
 async function fetchSteamGuardCodeFromEmail() {
   const session = await openImapSession();
   const checkedUids = new Set();
@@ -541,11 +559,23 @@ async function fetchSteamGuardCodeFromEmail() {
 
     const deadline = Date.now() + STEAM_EMAIL_IMAP_TIMEOUT_MS;
     while (Date.now() < deadline) {
-      const strictSearch = await session.sendCommand(buildSearchCommand());
-      let uids = parseSearchUids(strictSearch);
-      if (uids.length === 0) {
-        const broadSearch = await session.sendCommand('UID SEARCH ALL');
-        uids = parseSearchUids(broadSearch);
+      let uids = [];
+      for (const command of buildSearchCommands()) {
+        try {
+          const searchResponse = await session.sendCommand(command);
+          const parsed = parseSearchUids(searchResponse);
+          if (parsed.length > 0) {
+            uids = parsed;
+            break;
+          }
+        } catch (err) {
+          // Ignore unsupported SEARCH variants and continue with broader criteria.
+          const message = err?.message || String(err);
+          if (!/\bIMAP (NO|BAD)\b/i.test(message)) {
+            throw err;
+          }
+          continue;
+        }
       }
 
       const candidates = uids.slice(-STEAM_EMAIL_IMAP_MAX_MESSAGES).reverse();
