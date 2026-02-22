@@ -1,15 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { cs2 as cs2Api } from '../api'
 
-function boolLabel(value) {
-  return value ? 'Да' : 'Нет'
+function toDetail(err, fallback) {
+  const data = err?.response?.data
+  if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail
+  if (Array.isArray(data?.detail) && data.detail[0]) return String(data.detail[0])
+  if (Array.isArray(data?.non_field_errors) && data.non_field_errors[0]) return String(data.non_field_errors[0])
+  return fallback
 }
 
 export default function CS2Health() {
   const [health, setHealth] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const [inviteLink, setInviteLink] = useState('')
+  const [submitLoading, setSubmitLoading] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [submitSuccess, setSubmitSuccess] = useState('')
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true)
@@ -18,7 +27,7 @@ export default function CS2Health() {
       setHealth(data)
       setError('')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Не удалось получить health CS2 stats.')
+      setError(toDetail(err, 'Не удалось получить статус CS2 бота.'))
     } finally {
       if (!silent) setLoading(false)
     }
@@ -29,6 +38,40 @@ export default function CS2Health() {
     const timer = setInterval(() => load(true), 10000)
     return () => clearInterval(timer)
   }, [])
+
+  const isConnected = useMemo(() => {
+    return Boolean(health?.service_reachable && health?.service?.bot?.logged_on)
+  }, [health])
+
+  const onSubmit = async (event) => {
+    event.preventDefault()
+    const link = inviteLink.trim()
+    if (!link) {
+      setSubmitError('Введите ссылку приглашения в друзья.')
+      setSubmitSuccess('')
+      return
+    }
+
+    setSubmitLoading(true)
+    setSubmitError('')
+    setSubmitSuccess('')
+    try {
+      const { data } = await cs2Api.addFriendByInvite(link)
+      const status = data?.status || 'request_sent'
+      const steamId = data?.steam_id ? ` (${data.steam_id})` : ''
+      if (status === 'already_or_pending') {
+        setSubmitSuccess(`Уже в друзьях или заявка уже отправлена${steamId}.`)
+      } else {
+        setSubmitSuccess(`Заявка в друзья отправлена${steamId}.`)
+      }
+      setInviteLink('')
+      await load(true)
+    } catch (err) {
+      setSubmitError(toDetail(err, 'Не удалось отправить заявку в друзья.'))
+    } finally {
+      setSubmitLoading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -41,7 +84,7 @@ export default function CS2Health() {
   return (
     <>
       <div className="cs2-health-head">
-        <h1 className="page-title">CS2 Stats Health</h1>
+        <h1 className="page-title">Healthy</h1>
         <div className="cs2-health-head-actions">
           <button type="button" className="btn btn-secondary" onClick={() => load(false)}>
             Обновить
@@ -53,57 +96,41 @@ export default function CS2Health() {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+      {submitError && <div className="alert alert-error">{submitError}</div>}
+      {submitSuccess && <div className="alert alert-success">{submitSuccess}</div>}
 
-      {health && (
-        <div className="panel cs2-health-panel">
-          {!health.service_reachable && health.error && <div className="alert alert-warning">{health.error}</div>}
-
-          <div className="cs2-health-grid">
-            <div className="stat-box">
-              <div className="stat-label">API настроен</div>
-              <div className="stat-value">{boolLabel(health.configured)}</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-label">API доступен</div>
-              <div className="stat-value">{boolLabel(health.service_reachable)}</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-label">Token задан</div>
-              <div className="stat-value">{boolLabel(health.api_token_configured)}</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-label">HTTP код</div>
-              <div className="stat-value">{health.service_status_code ?? '-'}</div>
-            </div>
+      <section className="panel cs2-health-panel">
+        <h2>Статус бота</h2>
+        <div className="stat-grid">
+          <div className="stat-box">
+            <div className="stat-label">Подключен</div>
+            <div className="stat-value">{isConnected ? 'Да' : 'Нет'}</div>
           </div>
-
-          <p className="cs2-health-url">URL: {health.api_url || '-'}</p>
-
-          <h3 className="room-players-title">Конфигурация Steam-бота</h3>
-          <ul className="cs2-health-list">
-            <li>Логин задан: {boolLabel(health.bot_credentials?.username_set)}</li>
-            <li>Пароль задан: {boolLabel(health.bot_credentials?.password_set)}</li>
-            <li>2FA secret задан: {boolLabel(health.bot_credentials?.two_factor_set)}</li>
-          </ul>
-
-          {health.hint && (
-            <div className="alert alert-warning" style={{ marginTop: '0.5rem' }}>
-              {health.hint}
-            </div>
-          )}
-
-          <h3 className="room-players-title">Состояние бота</h3>
-          <ul className="cs2-health-list">
-            <li>Steam logged_on: {boolLabel(health.service?.bot?.logged_on)}</li>
-            <li>GC ready: {boolLabel(health.service?.bot?.gc_ready)}</li>
-            <li>GC session: {boolLabel(health.service?.bot?.have_gc_session)}</li>
-            <li>Последнее подключение: {health.service?.bot?.last_connected_at || '-'}</li>
-            <li>Последняя ошибка: {health.service?.bot?.last_error || '-'}</li>
-            <li>Reconnect attempts: {health.service?.bot?.reconnect_attempts ?? '-'}</li>
-            <li>Cache size: {health.service?.cache_size ?? '-'}</li>
-          </ul>
         </div>
-      )}
+        {!isConnected && health?.service?.bot?.last_error && (
+          <p className="form-hint" style={{ marginTop: '0.6rem' }}>
+            Последняя ошибка: {health.service.bot.last_error}
+          </p>
+        )}
+      </section>
+
+      <section className="panel cs2-health-panel">
+        <h2>Добавить друга по ссылке</h2>
+        <form onSubmit={onSubmit}>
+          <div className="room-search-bar">
+            <input
+              type="text"
+              value={inviteLink}
+              onChange={(event) => setInviteLink(event.target.value)}
+              placeholder="https://steamcommunity.com/profiles/7656119..."
+              autoComplete="off"
+            />
+            <button type="submit" className="btn btn-primary" disabled={submitLoading}>
+              {submitLoading ? 'Отправка...' : 'Добавить'}
+            </button>
+          </div>
+        </form>
+      </section>
     </>
   )
 }

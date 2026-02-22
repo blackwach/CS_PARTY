@@ -1,6 +1,6 @@
 ﻿from django.urls import path
 
-from .views import CS2StatsHealthView, MyCS2StatsView, SyncMyCS2StatsView
+from .views import CS2AddFriendView, CS2StatsHealthView, MyCS2StatsView, SyncMyCS2StatsView
 
 urlpatterns = [
     path('me/stats', MyCS2StatsView.as_view(), name='cs2-my-stats-no-slash'),
@@ -9,4 +9,6 @@ urlpatterns = [
     path('me/sync/', SyncMyCS2StatsView.as_view(), name='cs2-my-sync'),
     path('health', CS2StatsHealthView.as_view(), name='cs2-health-no-slash'),
     path('health/', CS2StatsHealthView.as_view(), name='cs2-health'),
+    path('friends/add', CS2AddFriendView.as_view(), name='cs2-friend-add-no-slash'),
+    path('friends/add/', CS2AddFriendView.as_view(), name='cs2-friend-add'),
 ]

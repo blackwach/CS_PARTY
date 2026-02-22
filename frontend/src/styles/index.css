@@ -152,8 +152,8 @@ input, button, select, textarea {
 }
 
 .app-layout.has-friends .main {
-  width: min(960px, calc(100% - 22rem));
-  margin-right: 19rem;
+  width: min(960px, calc(100% - 22.5rem));
+  margin-right: 19.5rem;
 }
 
 .btn {
@@ -441,7 +441,7 @@ input, button, select, textarea {
   top: calc(100% + 0.4rem);
   right: 0;
   width: min(480px, 90vw);
-  max-height: 70vh;
+  max-height: min(70dvh, calc(100dvh - 6rem));
   overflow: auto;
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -509,13 +509,16 @@ input, button, select, textarea {
   position: fixed;
   right: 0.75rem;
   top: 4.4rem;
-  width: 17.5rem;
-  height: calc(100vh - 5.2rem);
+  bottom: 0.75rem;
+  width: 18.5rem;
+  min-height: 22rem;
+  max-height: calc(100dvh - 5.2rem);
   background: rgba(13, 18, 25, 0.97);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   display: none;
   flex-direction: column;
+  overflow: hidden;
   z-index: 45;
 }
 .friends-panel.is-visible {
@@ -535,6 +538,8 @@ input, button, select, textarea {
 .friends-search-box {
   padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--border);
+  max-height: min(42dvh, 19rem);
+  overflow: auto;
 }
 .friends-search-bar {
   display: grid;
@@ -548,16 +553,25 @@ input, button, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  max-height: min(28dvh, 13rem);
+  overflow: auto;
 }
 .friends-search-item {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.4rem;
   padding: 0.4rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-elevated);
+}
+.friends-search-item > .btn {
+  min-width: 0;
+  justify-content: flex-start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .friends-search-item .btn {
   padding: 0.3rem 0.55rem;
@@ -568,12 +582,14 @@ input, button, select, textarea {
   flex-direction: column;
   align-items: flex-end;
   gap: 0.2rem;
+  flex-shrink: 0;
 }
 .friends-list {
   list-style: none;
   margin: 0;
   padding: 0.6rem;
   overflow: auto;
+  min-height: 0;
   flex: 1;
 }
 .friends-list-item {
@@ -619,6 +635,12 @@ input, button, select, textarea {
   align-items: center;
   column-gap: 0.45rem;
   row-gap: 0.1rem;
+  min-width: 0;
+}
+.friend-chat-btn > span:last-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .friend-chat-btn:hover {
   border-color: rgba(34, 197, 94, 0.45);
@@ -1116,6 +1138,10 @@ input, button, select, textarea {
 }
 .room-search-user {
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .room-search-result-item .btn {
   padding: 0.3rem 0.6rem;
@@ -1347,13 +1373,17 @@ input, button, select, textarea {
   }
   .friends-panel {
     top: 0;
+    bottom: 0;
     right: 0;
     width: 100vw;
-    height: 100vh;
+    max-height: 100dvh;
     border-radius: 0;
     border-left: none;
     border-right: none;
     border-top: none;
+  }
+  .friends-search-box {
+    max-height: min(46dvh, 22rem);
   }
   .friends-search-bar {
     grid-template-columns: 1fr;

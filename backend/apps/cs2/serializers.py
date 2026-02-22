@@ -5,6 +5,16 @@ from rest_framework import serializers
 from .models import MatchHistory, PlayerStats
 
 
+class CS2FriendInviteSerializer(serializers.Serializer):
+    invite_link = serializers.CharField(max_length=1024)
+
+    def validate_invite_link(self, value: str) -> str:
+        cleaned = str(value or '').strip()
+        if not cleaned:
+            raise serializers.ValidationError('Введите ссылку приглашения в друзья.')
+        return cleaned
+
+
 class MatchHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = MatchHistory

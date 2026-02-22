@@ -11,6 +11,9 @@ from .models import MatchHistory, PlayerStats
 STEAM_PROFILE_ID_RE = re.compile(r'steamcommunity\.com/profiles/(\d{17})(?:[/?#]|$)', re.IGNORECASE)
 STEAM_VANITY_RE = re.compile(r'steamcommunity\.com/id/([^/?#]+)(?:[/?#]|$)', re.IGNORECASE)
 STEAM_ID64_XML_RE = re.compile(r'<steamID64>(\d{17})</steamID64>', re.IGNORECASE)
+STEAM_FRIEND_ADD_RE = re.compile(r'steamcommunity\.com/(?:profiles/\d+/)?friend/add/(\d+)(?:[/?#]|$)', re.IGNORECASE)
+STEAM_ACCOUNT_ID_RE = re.compile(r'\[U:1:(\d+)\]', re.IGNORECASE)
+STEAM_ID64_BASE = 76561197960265728
 
 
 def _parse_datetime(value: str | None):
@@ -30,6 +33,95 @@ def _extract_steam_id_from_profile_url(url: str) -> str | None:
         return cleaned
     match = STEAM_PROFILE_ID_RE.search(cleaned)
     return match.group(1) if match else None
+
+
+def _account_id_to_steam64(value: str | int | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or not text.isdigit():
+        return None
+    if re.fullmatch(r'\d{17}', text):
+        return text
+    try:
+        account_id = int(text)
+    except ValueError:
+        return None
+    if account_id <= 0:
+        return None
+    if account_id > 4294967295:
+        return None
+    return str(STEAM_ID64_BASE + account_id)
+
+
+def _extract_steam_id_from_invite_link(invite_link: str) -> str | None:
+    if not invite_link:
+        return None
+
+    cleaned = invite_link.strip()
+    if not cleaned:
+        return None
+
+    # Direct SteamID64 or profile URL.
+    direct = _extract_steam_id_from_profile_url(cleaned)
+    if direct:
+        return direct
+
+    # Steam3 format: [U:1:123456]
+    steam3_match = STEAM_ACCOUNT_ID_RE.search(cleaned)
+    if steam3_match:
+        steam_id = _account_id_to_steam64(steam3_match.group(1))
+        if steam_id:
+            return steam_id
+
+    # steamcommunity.com/friend/add/<account_id or steamid64>
+    friend_add_match = STEAM_FRIEND_ADD_RE.search(cleaned)
+    if friend_add_match:
+        steam_id = _account_id_to_steam64(friend_add_match.group(1))
+        if steam_id:
+            return steam_id
+
+    # Vanity profile URL.
+    vanity_id = _resolve_vanity_steam_id(cleaned)
+    if vanity_id:
+        return vanity_id
+
+    # Try final URL after redirects (e.g. short invite URLs).
+    normalized = cleaned
+    if not re.match(r'^https?://', normalized, re.IGNORECASE) and (
+        normalized.lower().startswith('steamcommunity.com/') or normalized.lower().startswith('s.team/')
+    ):
+        normalized = f'https://{normalized}'
+
+    if re.match(r'^https?://', normalized, re.IGNORECASE):
+        try:
+            response = requests.get(normalized, timeout=20, allow_redirects=True)
+            final_url = (response.url or '').strip()
+        except requests.RequestException:
+            final_url = ''
+
+        if final_url:
+            direct = _extract_steam_id_from_profile_url(final_url)
+            if direct:
+                return direct
+
+            steam3_match = STEAM_ACCOUNT_ID_RE.search(final_url)
+            if steam3_match:
+                steam_id = _account_id_to_steam64(steam3_match.group(1))
+                if steam_id:
+                    return steam_id
+
+            friend_add_match = STEAM_FRIEND_ADD_RE.search(final_url)
+            if friend_add_match:
+                steam_id = _account_id_to_steam64(friend_add_match.group(1))
+                if steam_id:
+                    return steam_id
+
+            vanity_id = _resolve_vanity_steam_id(final_url)
+            if vanity_id:
+                return vanity_id
+
+    return None
 
 
 def _resolve_vanity_steam_id(profile_url: str) -> str | None:
@@ -289,3 +381,43 @@ def get_cs2_stats_health() -> dict:
             'Перезапустите контейнер: docker compose up -d cs2_stats_service --force-recreate'
         )
     return health
+
+
+def add_friend_by_invite_link(invite_link: str) -> dict:
+    api_url = str(settings.CS2_STATS_API_URL or '').strip().rstrip('/')
+    if not api_url:
+        raise ValueError('CS2_STATS_API_URL не задан.')
+
+    steam_id = _extract_steam_id_from_invite_link(invite_link)
+    if not steam_id:
+        raise ValueError(
+            'Не удалось извлечь SteamID64 из ссылки. Используйте ссылку вида '
+            'https://steamcommunity.com/profiles/7656119...'
+        )
+
+    headers = {}
+    if settings.CS2_STATS_API_TOKEN:
+        headers['Authorization'] = f"Bearer {settings.CS2_STATS_API_TOKEN}"
+
+    try:
+        response = requests.post(
+            f'{api_url}/bot/friends/add',
+            headers=headers,
+            json={'steam_id': steam_id},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(f'Не удалось обратиться к CS2 stats service: {exc}') from exc
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+
+    if not response.ok:
+        detail = payload.get('detail') or payload.get('error') or response.text or f'HTTP {response.status_code}'
+        raise RuntimeError(f'CS2 stats service вернул ошибку: {detail}')
+
+    result = dict(payload) if isinstance(payload, dict) else {}
+    result.setdefault('steam_id', steam_id)
+    return result
