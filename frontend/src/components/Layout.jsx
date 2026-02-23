@@ -1,11 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import FriendsPanel from './FriendsPanel'
 import NotificationBell from './NotificationBell'
 
+const FRIENDS_PANEL_STORAGE_KEY = 'cs_party_friends_panel_open'
+
 function defaultFriendsPanelState() {
-  if (typeof window === 'undefined') return true
+  if (typeof window === 'undefined') return false
+  const persisted = window.localStorage.getItem(FRIENDS_PANEL_STORAGE_KEY)
+  if (persisted === '1') return true
+  if (persisted === '0') return false
   return window.innerWidth > 1100
 }
 
@@ -14,6 +19,22 @@ export default function Layout() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [friendsOpen, setFriendsOpen] = useState(defaultFriendsPanelState)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(FRIENDS_PANEL_STORAGE_KEY, friendsOpen ? '1' : '0')
+  }, [friendsOpen])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const onResize = () => {
+      if (window.innerWidth <= 1100) {
+        setFriendsOpen(false)
+      }
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const pageVariant =
     pathname.startsWith('/login') ||

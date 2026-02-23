@@ -1296,7 +1296,14 @@ async function fetchHistoricalMatchesByShareCodes(
       break;
     }
 
-    if (!nextCode || nextCode === knownCode || seenShareCodes.has(nextCode)) {
+    if (!nextCode) {
+      if (index === 0 && knownCode === 'n/a') {
+        response.error =
+          'Steam API did not return next share code for this match token. Verify that you provided a valid steamidkey (match token) for this exact SteamID64.';
+      }
+      break;
+    }
+    if (nextCode === knownCode || seenShareCodes.has(nextCode)) {
       break;
     }
     seenShareCodes.add(nextCode);
@@ -2210,6 +2217,11 @@ app.get('/players/:steamId', requireToken, async (req, res) => {
       payload.history_enabled = true;
       payload.share_code_cursor = historySync.next_cursor || shareCodeCursor || '';
       payload.history_synced_share_codes = historySync.fetched_share_codes || 0;
+      if (!historySync.error && (historySync.fetched_share_codes || 0) === 0 && recentMatches.length === 0) {
+        const noDataHint =
+          'No GC history entries were resolved for this player. Check that the SteamID64 is correct, the match token belongs to this account, and the bot account has access to player data.';
+        payload.note = payload.note ? `${payload.note} ${noDataHint}` : noDataHint;
+      }
       if (historySync.error) {
         const historyError = String(historySync.error).trim();
         payload.note = payload.note ? `${payload.note} ${historyError}` : historyError;

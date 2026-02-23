@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { cs2 as cs2Api } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -42,7 +42,7 @@ export default function CS2Health() {
       setHealth(data)
       setError('')
     } catch (err) {
-      setError(toDetail(err, 'Не удалось получить статус CS2-бота.'))
+      setError(toDetail(err, 'РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ СЃС‚Р°С‚СѓСЃ CS2-Р±РѕС‚Р°.'))
     } finally {
       if (!silent) setLoading(false)
     }
@@ -59,16 +59,19 @@ export default function CS2Health() {
     return () => clearInterval(timer)
   }, [isBotAdmin])
 
+  const serviceReachable = Boolean(health?.service_reachable)
+  const botLoggedOn = Boolean(health?.service?.bot?.logged_on)
+  const gcReady = Boolean(health?.service?.bot?.gc_ready)
   const isConnected = useMemo(() => {
-    return Boolean(health?.service_reachable && health?.service?.bot?.logged_on)
-  }, [health])
+    return Boolean(serviceReachable && botLoggedOn && gcReady)
+  }, [serviceReachable, botLoggedOn, gcReady])
   const steamGuardPending = health?.service?.bot?.steam_guard_pending || null
 
   const onSubmit = async (event) => {
     event.preventDefault()
     const link = inviteLink.trim()
     if (!link) {
-      setSubmitError('Введите ссылку приглашения в друзья.')
+      setSubmitError('Р’РІРµРґРёС‚Рµ СЃСЃС‹Р»РєСѓ РїСЂРёРіР»Р°С€РµРЅРёСЏ РІ РґСЂСѓР·СЊСЏ.')
       setSubmitSuccess('')
       return
     }
@@ -81,14 +84,14 @@ export default function CS2Health() {
       const status = data?.status || 'request_sent'
       const steamId = data?.steam_id ? ` (${data.steam_id})` : ''
       if (status === 'already_or_pending') {
-        setSubmitSuccess(`Уже в друзьях или заявка уже отправлена${steamId}.`)
+        setSubmitSuccess(`РЈР¶Рµ РІ РґСЂСѓР·СЊСЏС… РёР»Рё Р·Р°СЏРІРєР° СѓР¶Рµ РѕС‚РїСЂР°РІР»РµРЅР°${steamId}.`)
       } else {
-        setSubmitSuccess(`Заявка в друзья отправлена${steamId}.`)
+        setSubmitSuccess(`Р—Р°СЏРІРєР° РІ РґСЂСѓР·СЊСЏ РѕС‚РїСЂР°РІР»РµРЅР°${steamId}.`)
       }
       setInviteLink('')
       await load(true)
     } catch (err) {
-      setSubmitError(toDetail(err, 'Не удалось отправить заявку в друзья.'))
+      setSubmitError(toDetail(err, 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ Р·Р°СЏРІРєСѓ РІ РґСЂСѓР·СЊСЏ.'))
     } finally {
       setSubmitLoading(false)
     }
@@ -98,7 +101,7 @@ export default function CS2Health() {
     event.preventDefault()
     const code = guardCode.trim().toUpperCase()
     if (!/^[A-Z0-9]{5}$/.test(code)) {
-      setGuardError('Введите корректный 5-символьный код Steam Guard.')
+      setGuardError('Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ 5-СЃРёРјРІРѕР»СЊРЅС‹Р№ РєРѕРґ Steam Guard.')
       setGuardSuccess('')
       return
     }
@@ -108,11 +111,11 @@ export default function CS2Health() {
     setGuardSuccess('')
     try {
       await cs2Api.submitSteamGuardCode(code)
-      setGuardSuccess('Код Steam Guard отправлен.')
+      setGuardSuccess('РљРѕРґ Steam Guard РѕС‚РїСЂР°РІР»РµРЅ.')
       setGuardCode('')
       await load(true)
     } catch (err) {
-      setGuardError(toDetail(err, 'Не удалось отправить код Steam Guard.'))
+      setGuardError(toDetail(err, 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РєРѕРґ Steam Guard.'))
     } finally {
       setGuardLoading(false)
     }
@@ -121,11 +124,11 @@ export default function CS2Health() {
   if (!isBotAdmin) {
     return (
       <section className="panel cs2-health-panel">
-        <h1 className="page-title">Состояние CS2-бота</h1>
+        <h1 className="page-title">РЎРѕСЃС‚РѕСЏРЅРёРµ CS2-Р±РѕС‚Р°</h1>
         <div className="alert alert-error">
-          Доступ к управлению CS2-ботом разрешен только для {CS2_BOT_ADMIN_EMAIL}.
+          Р”РѕСЃС‚СѓРї Рє СѓРїСЂР°РІР»РµРЅРёСЋ CS2-Р±РѕС‚РѕРј СЂР°Р·СЂРµС€РµРЅ С‚РѕР»СЊРєРѕ РґР»СЏ {CS2_BOT_ADMIN_EMAIL}.
         </div>
-        <Link className="btn btn-secondary" to="/cs2">К статистике</Link>
+        <Link className="btn btn-secondary" to="/cs2">Рљ СЃС‚Р°С‚РёСЃС‚РёРєРµ</Link>
       </section>
     )
   }
@@ -141,13 +144,13 @@ export default function CS2Health() {
   return (
     <>
       <div className="cs2-health-head">
-        <h1 className="page-title">Состояние CS2-бота</h1>
+        <h1 className="page-title">РЎРѕСЃС‚РѕСЏРЅРёРµ CS2-Р±РѕС‚Р°</h1>
         <div className="cs2-health-head-actions">
           <button type="button" className="btn btn-secondary" onClick={() => load(false)}>
-            Обновить
+            РћР±РЅРѕРІРёС‚СЊ
           </button>
           <Link className="btn btn-ghost" to="/cs2">
-            К статистике
+            Рљ СЃС‚Р°С‚РёСЃС‚РёРєРµ
           </Link>
         </div>
       </div>
@@ -159,16 +162,28 @@ export default function CS2Health() {
       {guardSuccess && <div className="alert alert-success">{guardSuccess}</div>}
 
       <section className="panel cs2-health-panel">
-        <h2>Статус бота</h2>
+        <h2>РЎС‚Р°С‚СѓСЃ Р±РѕС‚Р°</h2>
         <div className="stat-grid">
           <div className="stat-box">
-            <div className="stat-label">Подключен</div>
-            <div className="stat-value">{isConnected ? 'Да' : 'Нет'}</div>
+            <div className="stat-label">API reachable</div>
+            <div className="stat-value">{serviceReachable ? 'Yes' : 'No'}</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-label">Steam logged on</div>
+            <div className="stat-value">{botLoggedOn ? 'Yes' : 'No'}</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-label">GC ready</div>
+            <div className="stat-value">{gcReady ? 'Yes' : 'No'}</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-label">/players ready</div>
+            <div className="stat-value">{isConnected ? 'Yes' : 'No'}</div>
           </div>
         </div>
         {!isConnected && health?.service?.bot?.last_error && (
           <p className="form-hint" style={{ marginTop: '0.6rem' }}>
-            Последняя ошибка: {health.service.bot.last_error}
+            РџРѕСЃР»РµРґРЅСЏСЏ РѕС€РёР±РєР°: {health.service.bot.last_error}
           </p>
         )}
       </section>
@@ -177,8 +192,8 @@ export default function CS2Health() {
         <section className="panel cs2-health-panel">
           <h2>Steam Guard</h2>
           <p className="form-hint">
-            Для входа бота требуется код Steam Guard.
-            {steamGuardPending?.source ? ` Тип проверки: ${steamGuardPending.source}.` : ''}
+            Р”Р»СЏ РІС…РѕРґР° Р±РѕС‚Р° С‚СЂРµР±СѓРµС‚СЃСЏ РєРѕРґ Steam Guard.
+            {steamGuardPending?.source ? ` РўРёРї РїСЂРѕРІРµСЂРєРё: ${steamGuardPending.source}.` : ''}
           </p>
           <form onSubmit={onSubmitGuardCode}>
             <div className="room-search-bar">
@@ -191,7 +206,7 @@ export default function CS2Health() {
                 maxLength={5}
               />
               <button type="submit" className="btn btn-primary" disabled={guardLoading}>
-                {guardLoading ? 'Отправка...' : 'Отправить код'}
+                {guardLoading ? 'РћС‚РїСЂР°РІРєР°...' : 'РћС‚РїСЂР°РІРёС‚СЊ РєРѕРґ'}
               </button>
             </div>
           </form>
@@ -199,7 +214,7 @@ export default function CS2Health() {
       )}
 
       <section className="panel cs2-health-panel">
-        <h2>Добавить друга по ссылке</h2>
+        <h2>Р”РѕР±Р°РІРёС‚СЊ РґСЂСѓРіР° РїРѕ СЃСЃС‹Р»РєРµ</h2>
         <form onSubmit={onSubmit}>
           <div className="room-search-bar">
             <input
@@ -210,7 +225,7 @@ export default function CS2Health() {
               autoComplete="off"
             />
             <button type="submit" className="btn btn-primary" disabled={submitLoading}>
-              {submitLoading ? 'Отправка...' : 'Добавить'}
+              {submitLoading ? 'РћС‚РїСЂР°РІРєР°...' : 'Р”РѕР±Р°РІРёС‚СЊ'}
             </button>
           </div>
         </form>
@@ -218,3 +233,4 @@ export default function CS2Health() {
     </>
   )
 }
+
