@@ -988,8 +988,8 @@ function sanitizeShareCode(value) {
   }
 
   for (let index = 0; index < candidates.length; index += 1) {
-    const upper = String(candidates[index] || '').toUpperCase();
-    const match = upper.match(/CSGO(?:-[A-Z0-9]{5}){5}/);
+    const candidate = String(candidates[index] || '');
+    const match = candidate.match(/CSGO(?:-[A-Za-z0-9]{5}){5}/i);
     if (match) return match[0];
   }
   return '';

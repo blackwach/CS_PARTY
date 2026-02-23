@@ -199,7 +199,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             return ''
         share_code_match = CS2_SHARE_CODE_RE.search(cleaned)
         if share_code_match:
-            return share_code_match.group(1).upper()
+            return share_code_match.group(1)
         query_match = CS2_MATCH_TOKEN_QUERY_RE.search(cleaned)
         if query_match:
             return query_match.group(1)

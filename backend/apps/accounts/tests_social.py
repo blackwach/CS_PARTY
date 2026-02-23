@@ -99,15 +99,16 @@ class SocialApiTests(APITestCase):
 
     def test_profile_can_store_cs2_share_code(self):
         self.client.force_authenticate(user=self.alice)
+        mixed_case_code = 'CSGO-r9KKC-RHx6r-5Z3UA-X6cf5-mqbNE'
         response = self.client.patch(
             '/api/auth/me/',
-            {'cs2_match_token': 'steam://rungame/730/+csgo_download_match CSGO-AAAAA-BBBBB-CCCCC-DDDDD-EEEEE'},
+            {'cs2_match_token': f'steam://rungame/730/+csgo_download_match {mixed_case_code}'},
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['cs2_match_token'], 'CSGO-AAAAA-BBBBB-CCCCC-DDDDD-EEEEE')
+        self.assertEqual(response.data['cs2_match_token'], mixed_case_code)
         self.alice.refresh_from_db()
-        self.assertEqual(self.alice.cs2_match_token, 'CSGO-AAAAA-BBBBB-CCCCC-DDDDD-EEEEE')
+        self.assertEqual(self.alice.cs2_match_token, mixed_case_code)
 
     def test_profile_can_extract_steamidkey_from_url(self):
         self.client.force_authenticate(user=self.alice)
