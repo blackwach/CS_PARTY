@@ -27,7 +27,11 @@ const MATCH_HISTORY_REQUEST_TIMEOUT_MS = parseInt(
   10
 );
 const MATCH_HISTORY_MAX_SHARE_CODES_PER_SYNC = parseInt(
-  process.env.CS2_STATS_MATCH_HISTORY_MAX_SHARE_CODES_PER_SYNC || '40',
+  process.env.CS2_STATS_MATCH_HISTORY_MAX_SHARE_CODES_PER_SYNC || '5',
+  10
+);
+const MATCH_HISTORY_TIME_BUDGET_MS = parseInt(
+  process.env.CS2_STATS_MATCH_HISTORY_TIME_BUDGET_MS || '10000',
   10
 );
 const RECONNECT_DELAY_MS = parseInt(process.env.CS2_STATS_RECONNECT_DELAY_MS || '15000', 10);
@@ -1366,9 +1370,16 @@ async function fetchHistoricalMatchesByShareCodes(
   let knownCode = response.next_cursor || 'n/a';
   const seenShareCodes = new Set();
   const combinedMatches = [];
+  const syncDeadlineAt = Date.now() + Math.max(parseIntSafe(MATCH_HISTORY_TIME_BUDGET_MS, 0), 0);
 
   const maxShareCodes = Math.max(parseIntSafe(MATCH_HISTORY_MAX_SHARE_CODES_PER_SYNC, 0), 0);
   for (let index = 0; index < maxShareCodes; index += 1) {
+    if (syncDeadlineAt > 0 && Date.now() >= syncDeadlineAt) {
+      response.error =
+        'History sync time budget exceeded for this request. Returning partial history; continue sync on next refresh.';
+      break;
+    }
+
     let nextCode = '';
     try {
       nextCode = await fetchNextMatchSharingCode(steamId64, cleanedMatchToken, knownCode);
@@ -2279,13 +2290,22 @@ app.get('/players/:steamId', requireToken, async (req, res) => {
   try {
     let profile = {};
     let profileError = '';
-    try {
-      profile = await fetchPlayerProfile(steamId);
-    } catch (err) {
-      profileError = String(err?.message || '').trim();
+    let recentRawMatches = [];
+    const [profileResult, recentGamesResult] = await Promise.allSettled([
+      fetchPlayerProfile(steamId),
+      fetchRecentGames(steamId),
+    ]);
+
+    if (profileResult.status === 'fulfilled') {
+      profile = profileResult.value || {};
+    } else {
+      profileError = String(profileResult.reason?.message || profileResult.reason || '').trim();
     }
 
-    const recentRawMatches = await fetchRecentGames(steamId).catch(() => []);
+    if (recentGamesResult.status === 'fulfilled') {
+      recentRawMatches = recentGamesResult.value || [];
+    }
+
     const recentMatches = normalizeGcMatchesForPlayer(recentRawMatches, steamId);
 
     let historySync = {

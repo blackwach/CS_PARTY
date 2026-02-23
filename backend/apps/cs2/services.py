@@ -294,6 +294,7 @@ def sync_cs2_stats_for_user(user):
 
     if settings.CS2_STATS_API_URL:
         url = f"{settings.CS2_STATS_API_URL}/players/{steam_id}"
+        provider_timeout = max(int(getattr(settings, 'CS2_STATS_API_TIMEOUT_SECONDS', 45) or 45), 5)
         headers = {}
         params = {}
         if match_token:
@@ -304,7 +305,7 @@ def sync_cs2_stats_for_user(user):
             headers['Authorization'] = f"Bearer {settings.CS2_STATS_API_TOKEN}"
 
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=20)
+            response = requests.get(url, headers=headers, params=params, timeout=provider_timeout)
             response.raise_for_status()
         except requests.RequestException as exc:
             data = _sync_from_public_profile(steam_id)
