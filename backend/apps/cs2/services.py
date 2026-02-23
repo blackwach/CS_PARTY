@@ -16,6 +16,7 @@ STEAM_ID64_XML_RE = re.compile(r'<steamID64>(\d{17})</steamID64>', re.IGNORECASE
 STEAM_FRIEND_ADD_RE = re.compile(r'steamcommunity\.com/(?:profiles/\d+/)?friend/add/(\d+)(?:[/?#]|$)', re.IGNORECASE)
 STEAM_ACCOUNT_ID_RE = re.compile(r'\[U:1:(\d+)\]', re.IGNORECASE)
 STEAM_ID64_BASE = 76561197960265728
+CS2_SHARE_CODE_RE = re.compile(r'^CSGO(?:-[A-Za-z0-9]{5}){5}$')
 
 
 def _parse_datetime(value: str | None):
@@ -25,6 +26,10 @@ def _parse_datetime(value: str | None):
         return datetime.fromisoformat(value.replace('Z', '+00:00'))
     except ValueError:
         return None
+
+
+def _is_cs2_share_code(value: str | None) -> bool:
+    return bool(CS2_SHARE_CODE_RE.fullmatch(str(value or '').strip()))
 
 
 def _extract_steam_id_from_profile_url(url: str) -> str | None:
@@ -270,6 +275,8 @@ def sync_cs2_stats_for_user(user):
     previous_share_code_cursor = str((previous_raw_data or {}).get('share_code_cursor') or '').strip()
     previous_history_token = str((previous_raw_data or {}).get('history_token') or '').strip()
     match_token = get_user_cs2_match_token(user)
+    share_code_seed = str(getattr(user, 'cs2_share_code_seed', '') or '').strip()
+    history_request_token = match_token or share_code_seed
     if not steam_id:
         data = {
             'rank': '',
@@ -298,9 +305,16 @@ def sync_cs2_stats_for_user(user):
         provider_timeout = max(int(getattr(settings, 'CS2_STATS_API_TIMEOUT_SECONDS', 45) or 45), 5)
         headers = {}
         params = {}
-        if match_token:
-            params['match_token'] = match_token
-            if previous_share_code_cursor and previous_history_token and previous_history_token == match_token:
+        if history_request_token:
+            params['match_token'] = history_request_token
+            can_reuse_cursor = (
+                previous_share_code_cursor
+                and (
+                    (previous_history_token and previous_history_token == match_token)
+                    or (match_token and _is_cs2_share_code(previous_history_token))
+                )
+            )
+            if can_reuse_cursor:
                 params['share_code_cursor'] = previous_share_code_cursor
         if settings.CS2_STATS_API_TOKEN:
             headers['Authorization'] = f"Bearer {settings.CS2_STATS_API_TOKEN}"
@@ -330,7 +344,7 @@ def sync_cs2_stats_for_user(user):
         data = _sync_from_public_profile(steam_id)
 
     if isinstance(data, dict):
-        data['history_token'] = match_token if match_token else ''
+        data['history_token'] = history_request_token if history_request_token else ''
 
     if not stats:
         stats = PlayerStats.objects.create(user=user)

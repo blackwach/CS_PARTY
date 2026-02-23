@@ -126,6 +126,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
 class ProfileSerializer(serializers.ModelSerializer):
     steam_profile_url = serializers.URLField(required=False, allow_blank=True, max_length=512)
     cs2_match_token = serializers.CharField(required=False, allow_blank=True, max_length=128, write_only=True)
+    cs2_share_code_seed = serializers.CharField(required=False, allow_blank=True, max_length=64)
     cs2_match_token_masked = serializers.SerializerMethodField(read_only=True)
     cs2_match_token_set = serializers.SerializerMethodField(read_only=True)
     avatar = serializers.ImageField(required=False, allow_null=True)
@@ -150,6 +151,7 @@ class ProfileSerializer(serializers.ModelSerializer):
             'steam_account_id',
             'steam_profile_url',
             'cs2_match_token',
+            'cs2_share_code_seed',
             'cs2_match_token_masked',
             'cs2_match_token_set',
             'telegram_chat_id',
@@ -215,6 +217,17 @@ class ProfileSerializer(serializers.ModelSerializer):
                 'Некорректный CS2 match token. Допустимы 8-128 символов: буквы, цифры, "_" и "-".'
             )
         return cleaned
+
+    def validate_cs2_share_code_seed(self, value: str):
+        cleaned = str(value or '').strip()
+        if not cleaned:
+            return ''
+        share_code_match = CS2_SHARE_CODE_RE.search(cleaned)
+        if share_code_match:
+            return share_code_match.group(1)
+        raise serializers.ValidationError(
+            'Некорректный share code матча. Используйте формат CSGO-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX.'
+        )
 
     def update(self, instance, validated_data):
         requested_email = validated_data.pop('email', None)

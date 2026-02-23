@@ -18,6 +18,7 @@ class CustomUserAdmin(UserAdmin):
                     'avatar',
                     'steam_account_id',
                     'steam_profile_url',
+                    'cs2_share_code_seed',
                     'is_email_verified',
                     'pending_email',
                     'pending_email_previous',

@@ -61,6 +61,7 @@ class User(AbstractUser):
     steam_account_id = models.CharField(max_length=64, blank=True)
     steam_profile_url = models.URLField(max_length=512, blank=True)
     cs2_match_token = models.CharField(max_length=1024, blank=True)
+    cs2_share_code_seed = models.CharField(max_length=64, blank=True)
     is_email_verified = models.BooleanField(default=False)
     pending_email = models.EmailField(blank=True)
     pending_email_previous = models.EmailField(blank=True)

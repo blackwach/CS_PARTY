@@ -14,6 +14,7 @@ export default function Profile() {
     about: '',
     steam_profile_url: '',
     cs2_match_token: '',
+    cs2_share_code_seed: '',
     telegram_notifications_enabled: true,
   })
   const [avatarFile, setAvatarFile] = useState(null)
@@ -36,6 +37,7 @@ export default function Profile() {
       about: user.about || '',
       steam_profile_url: user.steam_profile_url || '',
       cs2_match_token: '',
+      cs2_share_code_seed: user.cs2_share_code_seed || '',
       telegram_notifications_enabled: user.telegram_notifications_enabled !== false,
     })
   }, [user])
@@ -66,6 +68,7 @@ export default function Profile() {
       if (form.cs2_match_token.trim()) {
         payload.append('cs2_match_token', form.cs2_match_token.trim())
       }
+      payload.append('cs2_share_code_seed', form.cs2_share_code_seed.trim())
       payload.append('telegram_notifications_enabled', String(form.telegram_notifications_enabled))
       if (avatarFile) payload.append('avatar', avatarFile)
 
@@ -89,6 +92,7 @@ export default function Profile() {
         data.initials?.[0] ||
         data.steam_profile_url?.[0] ||
         data.cs2_match_token?.[0] ||
+        data.cs2_share_code_seed?.[0] ||
         data.avatar?.[0] ||
         data.detail ||
         'Не удалось сохранить профиль.'
@@ -243,6 +247,20 @@ export default function Profile() {
             <p className="form-hint">
               Укажите параметр <code>steamidkey</code> из ссылки Steam Personal Game Data (Counter-Strike 2), чтобы
               подтягивать полную историю матчей без обрезки.
+            </p>
+          </div>
+          <div className="form-group">
+            <label htmlFor="cs2_share_code_seed">Стартовый share code матча (CSGO-...)</label>
+            <input
+              id="cs2_share_code_seed"
+              name="cs2_share_code_seed"
+              value={form.cs2_share_code_seed}
+              onChange={handleChange}
+              placeholder="CSGO-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+              autoComplete="off"
+            />
+            <p className="form-hint">
+              Нужен для первого запуска цепочки истории, если Steam не возвращает данные при knowncode=n/a.
             </p>
           </div>
           <button type="submit" className="btn btn-primary" disabled={loading}>

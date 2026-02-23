@@ -1372,6 +1372,7 @@ async function fetchHistoricalMatchesByShareCodes(
   const seenShareCodes = new Set();
   const combinedMatches = [];
   const syncDeadlineAt = Date.now() + Math.max(parseIntSafe(MATCH_HISTORY_TIME_BUDGET_MS, 0), 0);
+  let retriedWithResetCursor = false;
 
   const maxShareCodes = Math.max(parseIntSafe(MATCH_HISTORY_MAX_SHARE_CODES_PER_SYNC, 0), 0);
   for (let index = 0; index < maxShareCodes; index += 1) {
@@ -1386,9 +1387,19 @@ async function fetchHistoricalMatchesByShareCodes(
       nextCode = await fetchNextMatchSharingCode(steamId64, cleanedMatchToken, knownCode);
     } catch (err) {
       const rawError = String(err?.message || '').trim();
+      if (/HTTP\s*412/i.test(rawError) && knownCode !== 'n/a' && !retriedWithResetCursor) {
+        // Cursor can become stale; reset to initial state and retry once.
+        retriedWithResetCursor = true;
+        knownCode = 'n/a';
+        index -= 1;
+        continue;
+      }
       if (/HTTP\s*403/i.test(rawError)) {
         response.error =
           'Steam API вернул 403 при запросе следующего match code. Проверьте CS2_STATS_STEAM_WEB_API_KEY и что указан корректный steamidkey (match token) для этого SteamID64.';
+      } else if (/HTTP\s*412/i.test(rawError)) {
+        response.error =
+          'Steam API вернул 412 (Precondition Failed). Обычно это означает, что steamidkey (Authentication Code) не подходит для этого SteamID64, код устарел или для аккаунта еще нет доступной истории матчей.';
       } else {
         response.error = rawError || 'Failed to request next match sharing code';
       }
@@ -1396,9 +1407,14 @@ async function fetchHistoricalMatchesByShareCodes(
     }
 
     if (!nextCode) {
-      if (index === 0 && knownCode === 'n/a') {
-        response.error =
-          'Steam API did not return next share code for this match token. Verify that you provided a valid steamidkey (match token) for this exact SteamID64.';
+      if (index === 0) {
+        if (knownCode === 'n/a') {
+          response.error =
+            'Steam API вернул пустой ответ для knowncode=n/a. Возможное изменение поведения: для старта цепочки укажите share code любого своего MM/Premier матча (CSGO-...), после чего сервис продолжит историю автоматически.';
+        } else {
+          response.error =
+            'Steam API не вернул nextcode для указанного knowncode. Если это ваш последний матч — это нормально. Если ожидалась история, проверьте что share code принадлежит этому SteamID64 и относится к MM/Premier.';
+        }
       }
       break;
     }

@@ -126,6 +126,28 @@ class SocialApiTests(APITestCase):
         self.alice.refresh_from_db()
         self.assertEqual(decrypt_cs2_match_token(self.alice.cs2_match_token), 'TOKEN_ABCDEFG12345')
 
+    def test_profile_can_store_cs2_share_code_seed(self):
+        self.client.force_authenticate(user=self.alice)
+        response = self.client.patch(
+            '/api/auth/me/',
+            {'cs2_share_code_seed': 'steam://rungame/730/+csgo_download_match CSGO-r9KKC-RHx6r-5Z3UA-X6cf5-mqbNE'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['cs2_share_code_seed'], 'CSGO-r9KKC-RHx6r-5Z3UA-X6cf5-mqbNE')
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.cs2_share_code_seed, 'CSGO-r9KKC-RHx6r-5Z3UA-X6cf5-mqbNE')
+
+    def test_profile_rejects_invalid_cs2_share_code_seed(self):
+        self.client.force_authenticate(user=self.alice)
+        response = self.client.patch(
+            '/api/auth/me/',
+            {'cs2_share_code_seed': 'NOT_A_SHARE_CODE'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('cs2_share_code_seed', response.data)
+
     def test_profile_rejects_invalid_cs2_match_token(self):
         self.client.force_authenticate(user=self.alice)
         response = self.client.patch(

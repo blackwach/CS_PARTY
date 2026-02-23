@@ -80,6 +80,85 @@ class Cs2StatsFlowTests(APITestCase):
         self.assertEqual(stats_response.data['total_matches'], 17)
         self.assertEqual(len(stats_response.data['recent_matches']), 1)
 
+    @override_settings(CS2_STATS_API_URL='https://cs2-stats.example')
+    @patch('apps.cs2.services.requests.get')
+    def test_sync_uses_share_code_seed_when_match_token_missing(self, mock_get):
+        self.user.cs2_share_code_seed = 'CSGO-r9KKC-RHx6r-5Z3UA-X6cf5-mqbNE'
+        self.user.save(update_fields=['cs2_share_code_seed'])
+
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            'rank': 'Gold Nova 1',
+            'wins': 1,
+            'losses': 0,
+            'total_matches': 1,
+            'matches': [],
+            'history_mode': 'incremental',
+            'share_code_cursor': 'CSGO-r9KKC-RHx6r-5Z3UA-X6cf5-mqbNE',
+        }
+        mock_get.return_value = mock_response
+
+        self.client.patch(
+            '/api/auth/me/',
+            {'steam_profile_url': 'https://steamcommunity.com/profiles/76561198012345678'},
+            format='json',
+        )
+        sync_response = self.client.post('/api/cs2/me/sync/', {}, format='json')
+        self.assertEqual(sync_response.status_code, status.HTTP_200_OK)
+
+        provider_call = mock_get.call_args
+        self.assertIsNotNone(provider_call)
+        self.assertEqual(
+            provider_call.kwargs.get('params'),
+            {'match_token': 'CSGO-r9KKC-RHx6r-5Z3UA-X6cf5-mqbNE'},
+        )
+
+    @override_settings(CS2_STATS_API_URL='https://cs2-stats.example')
+    @patch('apps.cs2.services.requests.get')
+    def test_sync_reuses_cursor_when_switching_from_share_code_seed_to_match_token(self, mock_get):
+        PlayerStats.objects.create(
+            user=self.user,
+            raw_data={
+                'share_code_cursor': 'CSGO-CURSOR-ONE',
+                'history_token': 'CSGO-r9KKC-RHx6r-5Z3UA-X6cf5-mqbNE',
+            },
+        )
+        self.user.cs2_match_token = 'TOKEN_12345678'
+        self.user.cs2_share_code_seed = 'CSGO-r9KKC-RHx6r-5Z3UA-X6cf5-mqbNE'
+        self.user.save(update_fields=['cs2_match_token', 'cs2_share_code_seed'])
+
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            'rank': 'Gold Nova 2',
+            'wins': 2,
+            'losses': 0,
+            'total_matches': 2,
+            'matches': [],
+            'history_mode': 'incremental',
+            'share_code_cursor': 'CSGO-CURSOR-TWO',
+        }
+        mock_get.return_value = mock_response
+
+        self.client.patch(
+            '/api/auth/me/',
+            {'steam_profile_url': 'https://steamcommunity.com/profiles/76561198012345678'},
+            format='json',
+        )
+        sync_response = self.client.post('/api/cs2/me/sync/', {}, format='json')
+        self.assertEqual(sync_response.status_code, status.HTTP_200_OK)
+
+        provider_call = mock_get.call_args
+        self.assertIsNotNone(provider_call)
+        self.assertEqual(
+            provider_call.kwargs.get('params'),
+            {
+                'match_token': 'TOKEN_12345678',
+                'share_code_cursor': 'CSGO-CURSOR-ONE',
+            },
+        )
+
     @override_settings(CS2_STATS_API_URL='')
     def test_sync_without_steam_profile_returns_limited_mode(self):
         sync_response = self.client.post('/api/cs2/me/sync/', {}, format='json')
