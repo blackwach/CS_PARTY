@@ -27,11 +27,11 @@ const MATCH_HISTORY_REQUEST_TIMEOUT_MS = parseInt(
   10
 );
 const MATCH_HISTORY_MAX_SHARE_CODES_PER_SYNC = parseInt(
-  process.env.CS2_STATS_MATCH_HISTORY_MAX_SHARE_CODES_PER_SYNC || '5',
+  process.env.CS2_STATS_MATCH_HISTORY_MAX_SHARE_CODES_PER_SYNC || '20',
   10
 );
 const MATCH_HISTORY_TIME_BUDGET_MS = parseInt(
-  process.env.CS2_STATS_MATCH_HISTORY_TIME_BUDGET_MS || '10000',
+  process.env.CS2_STATS_MATCH_HISTORY_TIME_BUDGET_MS || '30000',
   10
 );
 const RECONNECT_DELAY_MS = parseInt(process.env.CS2_STATS_RECONNECT_DELAY_MS || '15000', 10);
@@ -777,6 +777,16 @@ function extractMapCodeFromText(value) {
   return '';
 }
 
+function sanitizeMapValue(rawMap) {
+  const direct = normalizeMapCode(rawMap);
+  if (direct) return direct;
+
+  const inferred = extractMapCodeFromText(rawMap);
+  if (inferred) return inferred;
+
+  return '';
+}
+
 function resolveMapFromRankingEntry(entry) {
   if (!entry || typeof entry !== 'object') return '';
 
@@ -963,6 +973,7 @@ function steamId64ToAccountId(steamId64) {
 function sanitizeMatchToken(value) {
   const token = normalizeText(value);
   if (!token) return '';
+  if (/^CSGO(?:-[A-Za-z0-9]{5}){5}$/i.test(token)) return '';
   if (/^[A-Za-z0-9_-]{8,128}$/.test(token)) return token;
 
   const fromQuery = extractQueryToken(token, ['steamidkey', 'match_token', 'token']);
@@ -1096,10 +1107,8 @@ function resolveGcRoundStatsForPlayer(matchEntry, steamId64) {
 
   return {
     map:
-      normalizeMapCode(matchEntry.map || matchEntry.map_name || matchEntry.mapName || '') ||
-      normalizeMapCode(finalRound.map || matchEntry?.watchablematchinfo?.game_map || '') ||
-      normalizeText(matchEntry.map || matchEntry.map_name || matchEntry.mapName || '') ||
-      normalizeText(finalRound.map || matchEntry?.watchablematchinfo?.game_map || ''),
+      sanitizeMapValue(matchEntry.map || matchEntry.map_name || matchEntry.mapName || '') ||
+      sanitizeMapValue(finalRound.map || matchEntry?.watchablematchinfo?.game_map || ''),
     result,
     kills,
     deaths,
@@ -1115,15 +1124,7 @@ function normalizeGcMatchEntryForPlayer(matchEntry, steamId64, fallbackIndex = 0
 
   const resolvedFromRounds = resolveGcRoundStatsForPlayer(matchEntry, steamId64);
   const map =
-    normalizeMapCode(
-      matchEntry.map ||
-        matchEntry.map_name ||
-        matchEntry.mapName ||
-        matchEntry?.watchablematchinfo?.game_map ||
-        resolvedFromRounds?.map ||
-        ''
-    ) ||
-    normalizeText(
+    sanitizeMapValue(
       matchEntry.map ||
         matchEntry.map_name ||
         matchEntry.mapName ||
@@ -2045,9 +2046,7 @@ function toBackendFormat(profile, recentMatches) {
     return {
       id: String(matchId),
       played_at: playedAt,
-      map:
-        normalizeMapCode(item.map_name || item.map || item.mapName || '') ||
-        normalizeText(item.map_name || item.map || item.mapName || ''),
+      map: sanitizeMapValue(item.map_name || item.map || item.mapName || ''),
       result: normalizeResult(item),
       kills,
       deaths,
@@ -2264,8 +2263,9 @@ app.post('/bot/friends/add', requireToken, async (req, res) => {
 app.get('/players/:steamId', requireToken, async (req, res) => {
   const steamId = sanitizeSteamId(req.params.steamId);
   const rawMatchToken = normalizeText(req.query?.match_token || req.headers['x-cs2-match-token'] || '');
+  const matchToken = sanitizeMatchToken(rawMatchToken);
   const seedShareCode = sanitizeShareCode(rawMatchToken);
-  const matchToken = seedShareCode ? '' : sanitizeMatchToken(rawMatchToken);
+  const shareCodeSeedOnlyMode = Boolean(seedShareCode && !matchToken);
   const shareCodeCursor = sanitizeShareCode(req.query?.share_code_cursor || '');
   const useHistorySync = Boolean(matchToken || seedShareCode);
   if (!/^\d{17}$/.test(steamId)) {
@@ -2329,6 +2329,11 @@ app.get('/players/:steamId', requireToken, async (req, res) => {
       payload.history_enabled = true;
       payload.share_code_cursor = historySync.next_cursor || shareCodeCursor || '';
       payload.history_synced_share_codes = historySync.fetched_share_codes || 0;
+      if (shareCodeSeedOnlyMode) {
+        const shareCodeHint =
+          'Используется share code одного матча. Для полной истории укажите steamidkey (match token) из Steam Personal Game Data.';
+        payload.note = payload.note ? `${payload.note} ${shareCodeHint}` : shareCodeHint;
+      }
       if (!historySync.error && (historySync.fetched_share_codes || 0) === 0 && recentMatches.length === 0) {
         const noDataHint =
           'No GC history entries were resolved for this player. Check that the SteamID64 is correct, the match token belongs to this account, and the bot account has access to player data.';

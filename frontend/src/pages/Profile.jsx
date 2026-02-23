@@ -35,7 +35,7 @@ export default function Profile() {
       initials: user.initials || '',
       about: user.about || '',
       steam_profile_url: user.steam_profile_url || '',
-      cs2_match_token: user.cs2_match_token || '',
+      cs2_match_token: '',
       telegram_notifications_enabled: user.telegram_notifications_enabled !== false,
     })
   }, [user])
@@ -63,7 +63,9 @@ export default function Profile() {
       payload.append('initials', form.initials.trim())
       payload.append('about', form.about.trim())
       payload.append('steam_profile_url', form.steam_profile_url.trim())
-      payload.append('cs2_match_token', form.cs2_match_token.trim())
+      if (form.cs2_match_token.trim()) {
+        payload.append('cs2_match_token', form.cs2_match_token.trim())
+      }
       payload.append('telegram_notifications_enabled', String(form.telegram_notifications_enabled))
       if (avatarFile) payload.append('avatar', avatarFile)
 
@@ -73,6 +75,7 @@ export default function Profile() {
       updateProfile(data)
       await loadUser()
       setAvatarFile(null)
+      setForm((prev) => ({ ...prev, cs2_match_token: '' }))
       if (data.pending_email && data.pending_email !== data.email) {
         setMessage('Профиль сохранен. Подтвердите новый email в письме в течение 10 минут.')
       } else {
@@ -223,17 +226,23 @@ export default function Profile() {
             />
           </div>
           <div className="form-group">
-            <label htmlFor="cs2_match_token">CS2 Match Token (steamidkey)</label>
+            <label htmlFor="cs2_match_token">Токен истории CS2 (steamidkey)</label>
             <input
               id="cs2_match_token"
               name="cs2_match_token"
               value={form.cs2_match_token}
               onChange={handleChange}
-              placeholder="Token для полной истории матчей CS2"
+              placeholder="steamidkey для полной истории матчей CS2"
               autoComplete="off"
             />
+            {user.cs2_match_token_set && !form.cs2_match_token.trim() && (
+              <p className="form-hint">
+                Токен уже сохранен в зашифрованном виде: <code>{user.cs2_match_token_masked}</code>
+              </p>
+            )}
             <p className="form-hint">
-              Укажите steamidkey из CS2 auth code, чтобы подтягивать полную историю матчей без обрезки.
+              Укажите параметр <code>steamidkey</code> из ссылки Steam Personal Game Data (Counter-Strike 2), чтобы
+              подтягивать полную историю матчей без обрезки.
             </p>
           </div>
           <button type="submit" className="btn btn-primary" disabled={loading}>

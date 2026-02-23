@@ -1576,6 +1576,10 @@ input, button, select, textarea {
   flex-wrap: wrap;
   align-items: center;
 }
+.cs2-sync-state {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
 .cs2-stats-alerts {
   display: flex;
   flex-direction: column;

@@ -61,7 +61,15 @@ function normalizeText(value) {
   return String(value || '').trim()
 }
 
+function isReplayArtifact(value) {
+  const text = normalizeText(value).toLowerCase()
+  if (!text) return false
+  if (text.startsWith('http://') || text.startsWith('https://')) return true
+  return text.includes('.dem')
+}
+
 function normalizeMapKey(rawMap) {
+  if (isReplayArtifact(rawMap)) return 'unknown'
   const source = normalizeText(rawMap).toLowerCase().replace(/\s+/g, '_')
   if (!source) return 'unknown'
   if (MAP_META[source]) return source
@@ -83,7 +91,7 @@ function buildDataUrl(svg) {
 function buildRankBadge(rankId, rankName) {
   const id = Number.isInteger(rankId) ? rankId : 0
   const colors = RANK_COLORS[id] || RANK_COLORS[0]
-  const label = String(rankName || 'No rank')
+  const label = String(rankName || 'Без ранга')
   const shortLabel = id > 0 ? `R${id}` : 'N/A'
 
   const svg = `
@@ -107,7 +115,7 @@ function buildRankBadge(rankId, rankName) {
 function buildMapPreview(meta) {
   const [start, end] = meta.palette
   const code = meta.code || ''
-  const title = meta.title || 'Unknown map'
+  const title = meta.title || 'Неизвестная карта'
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="360" height="208" viewBox="0 0 360 208">
       <defs>
@@ -141,9 +149,9 @@ export function getCs2RankBadgeDataUrl(rankId, rankName = '') {
 export function getCs2MapMeta(rawMap) {
   const key = normalizeMapKey(rawMap)
   const known = MAP_META[key] || null
-  const fallbackCode = normalizeText(rawMap).toLowerCase() || key || 'unknown'
+  const fallbackCode = known ? key : key || 'unknown'
   const code = known ? key : fallbackCode
-  const title = known ? known.title : normalizeText(rawMap) || code.toUpperCase()
+  const title = known ? known.title : 'Неизвестная карта'
   const palette = known ? known.palette : ['#334155', '#64748b']
   const imageKey = known ? key : `fallback:${title}`
 

@@ -9,6 +9,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.notifications.models import InAppNotification
+from .cs2_token_security import encrypt_cs2_match_token
 from .models import DirectMessage, FriendRequest, Friendship
 from .services import send_email_change_verification_email, send_verification_email
 
@@ -124,7 +125,9 @@ class RegistrationSerializer(serializers.ModelSerializer):
 
 class ProfileSerializer(serializers.ModelSerializer):
     steam_profile_url = serializers.URLField(required=False, allow_blank=True, max_length=512)
-    cs2_match_token = serializers.CharField(required=False, allow_blank=True, max_length=128)
+    cs2_match_token = serializers.CharField(required=False, allow_blank=True, max_length=128, write_only=True)
+    cs2_match_token_masked = serializers.SerializerMethodField(read_only=True)
+    cs2_match_token_set = serializers.SerializerMethodField(read_only=True)
     avatar = serializers.ImageField(required=False, allow_null=True)
     pending_email = serializers.EmailField(read_only=True)
     pending_email_expires_at = serializers.DateTimeField(read_only=True)
@@ -147,6 +150,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             'steam_account_id',
             'steam_profile_url',
             'cs2_match_token',
+            'cs2_match_token_masked',
+            'cs2_match_token_set',
             'telegram_chat_id',
             'telegram_username',
             'telegram_notifications_enabled',
@@ -164,6 +169,8 @@ class ProfileSerializer(serializers.ModelSerializer):
             'pending_email_expires_at',
             'is_online',
             'last_seen_at',
+            'cs2_match_token_masked',
+            'cs2_match_token_set',
         )
 
     def validate_email(self, value: str):
@@ -214,6 +221,9 @@ class ProfileSerializer(serializers.ModelSerializer):
         if requested_email and requested_email.lower() != instance.email.lower():
             send_email_change_verification_email(instance, requested_email)
 
+        if 'cs2_match_token' in validated_data:
+            validated_data['cs2_match_token'] = encrypt_cs2_match_token(validated_data.get('cs2_match_token'))
+
         steam_url = validated_data.get('steam_profile_url')
         if steam_url is not None:
             if not steam_url.strip():
@@ -226,6 +236,12 @@ class ProfileSerializer(serializers.ModelSerializer):
         if requested_email and requested_email.lower() != instance.email.lower():
             updated.refresh_from_db(fields=['email', 'pending_email', 'pending_email_expires_at'])
         return updated
+
+    def get_cs2_match_token_masked(self, obj):
+        return obj.get_cs2_match_token_masked()
+
+    def get_cs2_match_token_set(self, obj):
+        return bool(obj.get_cs2_match_token())
 
 
 class PublicProfileSerializer(serializers.ModelSerializer):

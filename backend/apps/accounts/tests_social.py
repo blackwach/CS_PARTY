@@ -3,6 +3,7 @@ from datetime import date
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.accounts.cs2_token_security import decrypt_cs2_match_token, encrypt_cs2_match_token
 from apps.accounts.models import DirectMessage, Friendship, User
 from apps.notifications.models import InAppNotification
 
@@ -93,9 +94,12 @@ class SocialApiTests(APITestCase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['cs2_match_token'], 'TOKEN_12345678')
+        self.assertTrue(response.data['cs2_match_token_set'])
+        self.assertTrue(response.data['cs2_match_token_masked'])
+        self.assertNotIn('cs2_match_token', response.data)
         self.alice.refresh_from_db()
-        self.assertEqual(self.alice.cs2_match_token, 'TOKEN_12345678')
+        self.assertNotEqual(self.alice.cs2_match_token, 'TOKEN_12345678')
+        self.assertEqual(decrypt_cs2_match_token(self.alice.cs2_match_token), 'TOKEN_12345678')
 
     def test_profile_can_store_cs2_share_code(self):
         self.client.force_authenticate(user=self.alice)
@@ -106,9 +110,9 @@ class SocialApiTests(APITestCase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['cs2_match_token'], mixed_case_code)
+        self.assertTrue(response.data['cs2_match_token_set'])
         self.alice.refresh_from_db()
-        self.assertEqual(self.alice.cs2_match_token, mixed_case_code)
+        self.assertEqual(decrypt_cs2_match_token(self.alice.cs2_match_token), mixed_case_code)
 
     def test_profile_can_extract_steamidkey_from_url(self):
         self.client.force_authenticate(user=self.alice)
@@ -118,9 +122,9 @@ class SocialApiTests(APITestCase):
             format='json',
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['cs2_match_token'], 'TOKEN_ABCDEFG12345')
+        self.assertTrue(response.data['cs2_match_token_set'])
         self.alice.refresh_from_db()
-        self.assertEqual(self.alice.cs2_match_token, 'TOKEN_ABCDEFG12345')
+        self.assertEqual(decrypt_cs2_match_token(self.alice.cs2_match_token), 'TOKEN_ABCDEFG12345')
 
     def test_profile_rejects_invalid_cs2_match_token(self):
         self.client.force_authenticate(user=self.alice)
@@ -131,3 +135,15 @@ class SocialApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('cs2_match_token', response.data)
+
+    def test_profile_update_without_cs2_match_token_keeps_existing_encrypted_value(self):
+        self.alice.cs2_match_token = encrypt_cs2_match_token('TOKEN_OLD_12345678')
+        self.alice.save(update_fields=['cs2_match_token'])
+        self.client.force_authenticate(user=self.alice)
+
+        response = self.client.patch('/api/auth/me/', {'about': 'updated'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['cs2_match_token_set'])
+
+        self.alice.refresh_from_db()
+        self.assertEqual(decrypt_cs2_match_token(self.alice.cs2_match_token), 'TOKEN_OLD_12345678')

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { cs2 as cs2Api } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -6,6 +6,7 @@ import { CS2_PREMIER_MAP_POOL, getCs2MapMeta, normalizeCs2MapKey } from '../util
 
 const STEAM_PROFILE_BASE = 'https://steamcommunity.com/profiles/'
 const CS2_BOT_ADMIN_EMAIL = 'backwach1@yandex.ru'
+const AUTO_SYNC_INTERVAL_MS = 120000
 
 const RESULT_LABELS = {
   win: 'Победа',
@@ -83,8 +84,23 @@ export default function CS2Stats() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState('')
+  const syncingRef = useRef(false)
 
   const steamProfileUrl = user?.steam_profile_url || (user?.steam_account_id ? `${STEAM_PROFILE_BASE}${user.steam_account_id}` : null)
+
+  const sync = useCallback((fallbackError) => {
+    if (syncingRef.current) return Promise.resolve(null)
+    syncingRef.current = true
+    setSyncing(true)
+    return cs2Api
+      .sync()
+      .then((res) => setStats(res.data))
+      .catch((err) => setError(extractApiError(err, fallbackError || 'Синхронизация статистики CS2 не удалась.')))
+      .finally(() => {
+        syncingRef.current = false
+        setSyncing(false)
+      })
+  }, [])
 
   useEffect(() => {
     setError('')
@@ -101,15 +117,19 @@ export default function CS2Stats() {
       .finally(() => setLoading(false))
   }, [])
 
-  const sync = () => {
-    setSyncing(true)
+  useEffect(() => {
+    if (!steamProfileUrl || loading) return undefined
+
     setError('')
-    cs2Api
-      .sync()
-      .then((res) => setStats(res.data))
-      .catch((err) => setError(extractApiError(err, 'Синхронизация статистики CS2 не удалась.')))
-      .finally(() => setSyncing(false))
-  }
+    sync('Автосинхронизация статистики CS2 не удалась.')
+    const timerId = window.setInterval(() => {
+      sync()
+    }, AUTO_SYNC_INTERVAL_MS)
+
+    return () => {
+      window.clearInterval(timerId)
+    }
+  }, [steamProfileUrl, loading, sync])
 
   const averages = stats?.averages || {}
   const rankId = Number.isInteger(stats?.rank_id) ? stats.rank_id : null
@@ -169,9 +189,7 @@ export default function CS2Stats() {
       <header className="cs2-stats-head">
         <h1 className="page-title">Статистика CS2</h1>
         <div className="cs2-stats-actions">
-          <button type="button" className="btn btn-primary" onClick={sync} disabled={syncing}>
-            {syncing ? 'Синхронизация...' : 'Синхронизировать'}
-          </button>
+          <span className="cs2-sync-state">{syncing ? 'Автосинхронизация...' : 'Автосинхронизация каждые 2 минуты'}</span>
           {isBotAdmin && (
             <Link to="/cs2/health" className="btn btn-secondary">
               Состояние бота
@@ -199,7 +217,7 @@ export default function CS2Stats() {
           </p>
         ) : (
           <p className="cs2-profile-link">
-            Укажите ссылку на Steam-профиль в <Link to="/profile">профиле</Link>, затем нажмите «Синхронизировать».
+            Укажите ссылку на Steam-профиль в <Link to="/profile">профиле</Link>, и синхронизация запустится автоматически.
           </p>
         )}
       </section>
@@ -208,8 +226,8 @@ export default function CS2Stats() {
         <section className="panel">
           <p className="cs2-empty-hint">
             {steamProfileUrl
-              ? 'Нажмите «Синхронизировать», чтобы обновить доступные данные.'
-              : 'Добавьте Steam-профиль и выполните первую синхронизацию.'}
+              ? 'Статистика синхронизируется автоматически. Если данные еще не появились, подождите несколько секунд.'
+              : 'Добавьте Steam-профиль и дождитесь первой автоматической синхронизации.'}
           </p>
         </section>
       ) : (

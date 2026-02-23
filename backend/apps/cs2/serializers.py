@@ -4,6 +4,23 @@ from rest_framework import serializers
 
 from .models import MatchHistory, PlayerStats
 
+MAP_PLACEHOLDER_RE = re.compile(r'map_\d+$', re.IGNORECASE)
+MAP_CANONICAL_RE = re.compile(r'^(?:de|cs|ar)_[a-z0-9_]{2,64}$', re.IGNORECASE)
+
+
+def _is_usable_map_name(value: str | None) -> bool:
+    map_name = str(value or '').strip()
+    if not map_name:
+        return False
+    lower = map_name.lower()
+    if MAP_PLACEHOLDER_RE.fullmatch(lower):
+        return False
+    if lower.startswith('http://') or lower.startswith('https://'):
+        return False
+    if '.dem' in lower:
+        return False
+    return bool(MAP_CANONICAL_RE.fullmatch(lower))
+
 
 def _extract_headshots(raw_data: dict | None) -> int:
     raw = raw_data or {}
@@ -137,7 +154,7 @@ def _collect_map_stats_from_matches(obj: PlayerStats | None) -> dict[str, dict]:
     aggregate: dict[str, dict] = {}
     for item in _unique_matches(obj):
         map_name = str(item.map_name or '').strip()
-        if not map_name:
+        if not _is_usable_map_name(map_name):
             continue
 
         key = map_name.lower()
@@ -187,9 +204,7 @@ def _extract_map_ranks(raw_data: dict | None, obj: PlayerStats | None = None) ->
             continue
 
         map_name = str(row.get('map') or row.get('map_name') or '').strip()
-        if not map_name:
-            continue
-        if re.fullmatch(r'map_\d+', map_name.lower()):
+        if not _is_usable_map_name(map_name):
             continue
         map_key = map_name.lower()
         if map_key in seen_maps:

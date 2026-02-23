@@ -7,6 +7,7 @@ import requests
 from django.conf import settings
 from django.utils import timezone
 
+from apps.accounts.cs2_token_security import get_user_cs2_match_token
 from .models import MatchHistory, PlayerStats
 
 STEAM_PROFILE_ID_RE = re.compile(r'steamcommunity\.com/profiles/(\d{17})(?:[/?#]|$)', re.IGNORECASE)
@@ -268,7 +269,7 @@ def sync_cs2_stats_for_user(user):
     previous_raw_data = stats.raw_data if stats else {}
     previous_share_code_cursor = str((previous_raw_data or {}).get('share_code_cursor') or '').strip()
     previous_history_token = str((previous_raw_data or {}).get('history_token') or '').strip()
-    match_token = str(getattr(user, 'cs2_match_token', '') or '').strip()
+    match_token = get_user_cs2_match_token(user)
     if not steam_id:
         data = {
             'rank': '',

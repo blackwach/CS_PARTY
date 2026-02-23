@@ -443,6 +443,7 @@ class Cs2StatsFlowTests(APITestCase):
                 'map_ranks': [
                     {'map': 'map_1', 'rank_id': 11, 'wins': 2},
                     {'map': 'map_2', 'rank_id': 12, 'wins': 1},
+                    {'map': 'http://replay184.valve.net/730/003804799967898370245_1104343980.dem.bz2', 'rank_id': 13, 'wins': 1},
                 ]
             },
         )
@@ -455,10 +456,20 @@ class Cs2StatsFlowTests(APITestCase):
             deaths=14,
             assists=6,
         )
+        MatchHistory.objects.create(
+            user=target,
+            external_match_id='m-replay-url',
+            map_name='http://replay184.valve.net/730/003804799967898370245_1104343980.dem.bz2',
+            result=MatchHistory.RESULT_WIN,
+            kills=22,
+            deaths=13,
+            assists=5,
+        )
 
         response = self.client.get(f'/api/cs2/users/{target.id}/stats/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         maps = [str(item.get('map') or '') for item in response.data['map_ranks']]
         self.assertNotIn('map_1', maps)
         self.assertNotIn('map_2', maps)
+        self.assertNotIn('http://replay184.valve.net/730/003804799967898370245_1104343980.dem.bz2', maps)
         self.assertIn('de_mirage', maps)

@@ -60,7 +60,7 @@ class User(AbstractUser):
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
     steam_account_id = models.CharField(max_length=64, blank=True)
     steam_profile_url = models.URLField(max_length=512, blank=True)
-    cs2_match_token = models.CharField(max_length=128, blank=True)
+    cs2_match_token = models.CharField(max_length=1024, blank=True)
     is_email_verified = models.BooleanField(default=False)
     pending_email = models.EmailField(blank=True)
     pending_email_previous = models.EmailField(blank=True)
@@ -88,6 +88,16 @@ class User(AbstractUser):
     @property
     def is_online(self) -> bool:
         return self.ws_connection_count > 0
+
+    def get_cs2_match_token(self) -> str:
+        from .cs2_token_security import decrypt_cs2_match_token
+
+        return decrypt_cs2_match_token(self.cs2_match_token)
+
+    def get_cs2_match_token_masked(self) -> str:
+        from .cs2_token_security import mask_cs2_match_token
+
+        return mask_cs2_match_token(self.cs2_match_token)
 
 
 class EmailActionToken(models.Model):
