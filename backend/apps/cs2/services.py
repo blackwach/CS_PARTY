@@ -267,6 +267,7 @@ def sync_cs2_stats_for_user(user):
     stats = PlayerStats.objects.filter(user=user).first()
     previous_raw_data = stats.raw_data if stats else {}
     previous_share_code_cursor = str((previous_raw_data or {}).get('share_code_cursor') or '').strip()
+    previous_history_token = str((previous_raw_data or {}).get('history_token') or '').strip()
     match_token = str(getattr(user, 'cs2_match_token', '') or '').strip()
     if not steam_id:
         data = {
@@ -297,7 +298,7 @@ def sync_cs2_stats_for_user(user):
         params = {}
         if match_token:
             params['match_token'] = match_token
-            if previous_share_code_cursor:
+            if previous_share_code_cursor and previous_history_token and previous_history_token == match_token:
                 params['share_code_cursor'] = previous_share_code_cursor
         if settings.CS2_STATS_API_TOKEN:
             headers['Authorization'] = f"Bearer {settings.CS2_STATS_API_TOKEN}"
@@ -325,6 +326,9 @@ def sync_cs2_stats_for_user(user):
 
     else:
         data = _sync_from_public_profile(steam_id)
+
+    if isinstance(data, dict):
+        data['history_token'] = match_token if match_token else ''
 
     if not stats:
         stats = PlayerStats.objects.create(user=user)

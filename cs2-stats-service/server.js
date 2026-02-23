@@ -202,6 +202,7 @@ const botState = {
 };
 
 const playerCache = new Map();
+let matchListRequestQueue = Promise.resolve();
 
 const COMMON_NON_CODE_TOKENS = new Set([
   'STEAM',
@@ -958,14 +959,61 @@ function steamId64ToAccountId(steamId64) {
 function sanitizeMatchToken(value) {
   const token = normalizeText(value);
   if (!token) return '';
-  return /^[A-Za-z0-9_-]{8,128}$/.test(token) ? token : '';
+  if (/^[A-Za-z0-9_-]{8,128}$/.test(token)) return token;
+
+  const fromQuery = extractQueryToken(token, ['steamidkey', 'match_token', 'token']);
+  if (fromQuery) return fromQuery;
+
+  const inlineMatch = token.match(/\b[A-Za-z0-9_-]{8,128}\b/);
+  return inlineMatch ? inlineMatch[0] : '';
 }
 
 function sanitizeShareCode(value) {
-  const code = normalizeText(value).toUpperCase();
-  if (!code || code.toLowerCase() === 'n/a') return '';
-  if (!/^CSGO(?:-[A-Z0-9]{5}){5}$/.test(code)) return '';
-  return code;
+  const source = normalizeText(value);
+  if (!source) return '';
+  if (source.toLowerCase() === 'n/a') return '';
+
+  const candidates = [source];
+  try {
+    const decoded = decodeURIComponent(source);
+    if (decoded && decoded !== source) {
+      candidates.push(decoded);
+    }
+  } catch (_) {
+    // Ignore malformed URI input.
+  }
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const upper = String(candidates[index] || '').toUpperCase();
+    const match = upper.match(/CSGO(?:-[A-Z0-9]{5}){5}/);
+    if (match) return match[0];
+  }
+  return '';
+}
+
+function extractQueryToken(rawValue, keys) {
+  if (!rawValue) return '';
+  const normalizedKeys = Array.isArray(keys) ? keys.map((item) => String(item || '').toLowerCase()) : [];
+  if (normalizedKeys.length === 0) return '';
+
+  try {
+    const url = new URL(rawValue);
+    for (let index = 0; index < normalizedKeys.length; index += 1) {
+      const candidate = normalizeText(url.searchParams.get(normalizedKeys[index]));
+      if (/^[A-Za-z0-9_-]{8,128}$/.test(candidate)) return candidate;
+    }
+  } catch (_) {
+    // Not a valid URL - continue with regex fallback below.
+  }
+
+  for (let index = 0; index < normalizedKeys.length; index += 1) {
+    const key = normalizedKeys[index].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = String(rawValue).match(new RegExp(`(?:^|[?&#])${key}=([A-Za-z0-9_-]{8,128})(?:$|[&#])`, 'i'));
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  return '';
 }
 
 function readPlayerStatFromArray(source, index, fallback = 0) {
@@ -1163,22 +1211,61 @@ function normalizeGcMatchesForPlayer(payload, steamId64) {
   return normalized;
 }
 
-function requestGameByShareCode(shareCode) {
+function enqueueMatchListRequest(task) {
+  const run = matchListRequestQueue
+    .catch(() => undefined)
+    .then(() => task());
+  matchListRequestQueue = run.catch(() => undefined);
+  return run;
+}
+
+function runGcMatchListRequest(requestFn, timeoutMessage, timeoutMs = REQUEST_TIMEOUT_MS) {
   if (!gcReady || !csgo || !csgo.haveGCSession) {
     return Promise.reject(new Error('Game Coordinator is not ready'));
   }
 
-  return withTimeout(
+  return enqueueMatchListRequest(
     () =>
       new Promise((resolve, reject) => {
-        csgo.once('matchList', (matches) => resolve(matches || []));
-        try {
-          csgo.requestGame(shareCode);
-        } catch (err) {
+        let settled = false;
+        let timer = null;
+        const onMatchList = (matches) => {
+          if (settled) return;
+          settled = true;
+          if (timer) clearTimeout(timer);
+          resolve(matches || []);
+        };
+        const cleanup = () => {
+          csgo.removeListener('matchList', onMatchList);
+          if (timer) clearTimeout(timer);
+        };
+        const fail = (err) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
           reject(err);
+        };
+
+        timer = setTimeout(() => {
+          fail(new Error(timeoutMessage));
+        }, timeoutMs);
+
+        csgo.once('matchList', onMatchList);
+        try {
+          const result = requestFn();
+          if (result === false) {
+            fail(new Error('Invalid matchList request payload'));
+          }
+        } catch (err) {
+          fail(err);
         }
-      }),
-    REQUEST_TIMEOUT_MS,
+      })
+  );
+}
+
+function requestGameByShareCode(shareCode) {
+  return runGcMatchListRequest(
+    () => csgo.requestGame(shareCode),
     'Timeout while waiting matchList (requestGame)'
   );
 }
@@ -1766,57 +1853,51 @@ async function connectBot(source = 'startup') {
   }
 }
 
-function withTimeout(promiseFactory, timeoutMs, timeoutMessage) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
-    promiseFactory()
-      .then((data) => {
-        clearTimeout(timeout);
-        resolve(data);
-      })
-      .catch((err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-  });
-}
-
 function fetchPlayerProfile(steamId64) {
   if (!gcReady || !csgo || !csgo.haveGCSession) {
     return Promise.reject(new Error('Game Coordinator is not ready'));
   }
 
-  return withTimeout(
-    () =>
-      new Promise((resolve, reject) => {
-        csgo.once('playersProfile', (profile) => resolve(profile));
-        try {
-          csgo.requestPlayersProfile(steamId64);
-        } catch (err) {
-          reject(err);
-        }
-      }),
-    REQUEST_TIMEOUT_MS,
-    'Timeout while waiting playersProfile'
-  );
+  return new Promise((resolve, reject) => {
+    const eventName = `playersProfile#${steamId64}`;
+    let settled = false;
+    let timer = null;
+    const onProfile = (profile) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(profile);
+    };
+    const cleanup = () => {
+      csgo.removeListener(eventName, onProfile);
+      if (timer) clearTimeout(timer);
+    };
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    };
+
+    timer = setTimeout(() => {
+      fail(new Error('Timeout while waiting playersProfile'));
+    }, REQUEST_TIMEOUT_MS);
+
+    csgo.once(eventName, onProfile);
+    try {
+      const result = csgo.requestPlayersProfile(steamId64);
+      if (result === false) {
+        fail(new Error('Invalid SteamID64 for playersProfile request'));
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
 }
 
 function fetchRecentGames(steamId64) {
-  if (!gcReady || !csgo || !csgo.haveGCSession) {
-    return Promise.reject(new Error('Game Coordinator is not ready'));
-  }
-
-  return withTimeout(
-    () =>
-      new Promise((resolve, reject) => {
-        csgo.once('matchList', (matches) => resolve(matches || []));
-        try {
-          csgo.requestRecentGames(steamId64);
-        } catch (err) {
-          reject(err);
-        }
-      }),
-    REQUEST_TIMEOUT_MS,
+  return runGcMatchListRequest(
+    () => csgo.requestRecentGames(steamId64),
     'Timeout while waiting matchList'
   );
 }

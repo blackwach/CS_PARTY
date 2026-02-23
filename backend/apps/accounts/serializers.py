@@ -17,6 +17,11 @@ User = get_user_model()
 STEAM_PROFILES_RE = re.compile(r'steamcommunity\.com/profiles/(\d{17})(?:[/?#]|$)', re.IGNORECASE)
 STEAM_ID_RE = re.compile(r'steamcommunity\.com/id/([^/?#]+)(?:[/?#]|$)', re.IGNORECASE)
 CS2_MATCH_TOKEN_RE = re.compile(r'^[A-Za-z0-9_-]{8,128}$')
+CS2_SHARE_CODE_RE = re.compile(r'(CSGO(?:-[A-Za-z0-9]{5}){5})', re.IGNORECASE)
+CS2_MATCH_TOKEN_QUERY_RE = re.compile(
+    r'(?:^|[?&#])(?:steamidkey|match_token|token)=([A-Za-z0-9_-]{8,128})(?:$|[&#])',
+    re.IGNORECASE,
+)
 
 
 def steam_id_from_profile_url(url: str) -> str | None:
@@ -192,6 +197,12 @@ class ProfileSerializer(serializers.ModelSerializer):
         cleaned = str(value or '').strip()
         if not cleaned:
             return ''
+        share_code_match = CS2_SHARE_CODE_RE.search(cleaned)
+        if share_code_match:
+            return share_code_match.group(1).upper()
+        query_match = CS2_MATCH_TOKEN_QUERY_RE.search(cleaned)
+        if query_match:
+            return query_match.group(1)
         if not CS2_MATCH_TOKEN_RE.fullmatch(cleaned):
             raise serializers.ValidationError(
                 'Некорректный CS2 match token. Допустимы 8-128 символов: буквы, цифры, "_" и "-".'

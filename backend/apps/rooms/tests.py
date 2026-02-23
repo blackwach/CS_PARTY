@@ -51,6 +51,20 @@ class RoomInviteNotificationTests(APITestCase):
         self.assertIsNotNone(notification)
         self.assertEqual(notification.payload.get('room_code'), room['code'])
 
+    @patch('apps.notifications.services.send_telegram_message', return_value=True)
+    def test_room_invite_uses_existing_personal_telegram_notification_logic(self, mock_send_telegram):
+        self.guest.telegram_chat_id = 123456789
+        self.guest.telegram_notifications_enabled = True
+        self.guest.save(update_fields=['telegram_chat_id', 'telegram_notifications_enabled'])
+
+        room = self._create_room()
+        self.assertTrue(room['code'])
+
+        mock_send_telegram.assert_called_once()
+        args, _ = mock_send_telegram.call_args
+        self.assertEqual(args[0], 123456789)
+        self.assertIn('Приглашение в комнату CS2', args[1])
+
     def test_room_can_use_host_server_endpoint(self):
         response = self.client.post(
             '/api/rooms/',

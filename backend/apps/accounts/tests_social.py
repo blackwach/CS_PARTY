@@ -97,6 +97,30 @@ class SocialApiTests(APITestCase):
         self.alice.refresh_from_db()
         self.assertEqual(self.alice.cs2_match_token, 'TOKEN_12345678')
 
+    def test_profile_can_store_cs2_share_code(self):
+        self.client.force_authenticate(user=self.alice)
+        response = self.client.patch(
+            '/api/auth/me/',
+            {'cs2_match_token': 'steam://rungame/730/+csgo_download_match CSGO-AAAAA-BBBBB-CCCCC-DDDDD-EEEEE'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['cs2_match_token'], 'CSGO-AAAAA-BBBBB-CCCCC-DDDDD-EEEEE')
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.cs2_match_token, 'CSGO-AAAAA-BBBBB-CCCCC-DDDDD-EEEEE')
+
+    def test_profile_can_extract_steamidkey_from_url(self):
+        self.client.force_authenticate(user=self.alice)
+        response = self.client.patch(
+            '/api/auth/me/',
+            {'cs2_match_token': 'https://example.com/cs2?steamidkey=TOKEN_ABCDEFG12345&steamid=76561198000000000'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['cs2_match_token'], 'TOKEN_ABCDEFG12345')
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.cs2_match_token, 'TOKEN_ABCDEFG12345')
+
     def test_profile_rejects_invalid_cs2_match_token(self):
         self.client.force_authenticate(user=self.alice)
         response = self.client.patch(
