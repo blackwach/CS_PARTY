@@ -2196,7 +2196,14 @@ app.get('/players/:steamId', requireToken, async (req, res) => {
   }
 
   try {
-    const profile = await fetchPlayerProfile(steamId);
+    let profile = {};
+    let profileError = '';
+    try {
+      profile = await fetchPlayerProfile(steamId);
+    } catch (err) {
+      profileError = String(err?.message || '').trim();
+    }
+
     const recentRawMatches = await fetchRecentGames(steamId).catch(() => []);
     const recentMatches = normalizeGcMatchesForPlayer(recentRawMatches, steamId);
 
@@ -2212,6 +2219,10 @@ app.get('/players/:steamId', requireToken, async (req, res) => {
     }
 
     const payload = toBackendFormat(profile, [...recentMatches, ...(historySync.matches || [])]);
+    if (profileError) {
+      const profileHint = `playersProfile is unavailable (${profileError}).`;
+      payload.note = payload.note ? `${payload.note} ${profileHint}` : profileHint;
+    }
     if (useHistorySync) {
       payload.history_mode = 'incremental';
       payload.history_enabled = true;
